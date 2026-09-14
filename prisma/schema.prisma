@@ -1,0 +1,714 @@
+// Auditoria Fiscal e Contábil Azuos
+// Ver docs/ARQUITETURA.md e docs/CATALOGO_ACHADOS.md
+//
+// Regra inegociável: valor monetário é Decimal(18,2) e base de cálculo é Decimal(18,4).
+// Nunca Float — arredondamento binário em tributo produz diferença de centavos que
+// destrói a credibilidade do relatório.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================================
+// ACESSO
+// =====================================================================
+
+enum PapelUsuario {
+  ADMIN
+  AUDITOR
+  COMERCIAL
+  LEITURA
+}
+
+model Organizacao {
+  id        String   @id @default(cuid())
+  nome      String
+  cnpj      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usuarios  Usuario[]
+  empresas  Empresa[]
+}
+
+model Usuario {
+  id             String      @id @default(cuid())
+  organizacaoId  String
+  organizacao    Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  nome         String
+  email        String       @unique
+  senhaHash    String
+  papel        PapelUsuario @default(AUDITOR)
+  ativo        Boolean      @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditorias Auditoria[]
+
+  @@index([organizacaoId])
+}
+
+// =====================================================================
+// EMPRESA AUDITADA
+// =====================================================================
+
+enum RegimeTributario {
+  SIMPLES_NACIONAL
+  LUCRO_PRESUMIDO
+  LUCRO_REAL
+  MEI
+  IMUNE_ISENTA
+  ARBITRADO
+}
+
+model Empresa {
+  id            String      @id @default(cuid())
+  organizacaoId String
+  organizacao   Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  cnpj               String
+  razaoSocial        String
+  nomeFantasia       String?
+  naturezaJuridica   String?
+  cnaePrincipal      String?
+  cnaesSecundarios   String[] @default([])
+  uf                 String?
+  municipio          String?
+  inscricaoEstadual  String?
+  inscricaoMunicipal String?
+  capitalSocial      Decimal? @db.Decimal(18, 2)
+  dataAbertura       DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  regimes    RegimePorExercicio[]
+  socios     Socio[]
+  auditorias Auditoria[]
+
+  @@unique([organizacaoId, cnpj])
+  @@index([cnpj])
+}
+
+/// O regime muda de ano para ano — e é ele que define QUAL motor de regras aplicar.
+/// Sem isto preenchido corretamente, todo cruzamento fica errado.
+model RegimePorExercicio {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  exercicio Int
+  regime    RegimeTributario
+  /// Como o regime foi determinado: informado, extraído do PGDAS, da ECF etc.
+  origem    String?
+
+  @@unique([empresaId, exercicio])
+  @@index([empresaId])
+}
+
+model Socio {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  nome         String
+  documento    String
+  qualificacao String?
+  percentual   Decimal? @db.Decimal(9, 4)
+  administrador Boolean @default(false)
+
+  @@index([empresaId])
+}
+
+// =====================================================================
+// AUDITORIA
+// =====================================================================
+
+enum StatusAuditoria {
+  RASCUNHO
+  IMPORTANDO
+  PROCESSANDO
+  PRONTA
+  ENTREGUE
+  ARQUIVADA
+}
+
+enum NivelAuditoria {
+  DIAGNOSTICO_RAPIDO
+  FISCAL
+  COMPLETA
+}
+
+model Auditoria {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  responsavelId String?
+  responsavel   Usuario? @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  titulo         String
+  competenciaIni String          @db.VarChar(7) // "2021-01"
+  competenciaFim String          @db.VarChar(7)
+  status         StatusAuditoria @default(RASCUNHO)
+  /// Nível efetivamente alcançado, conforme os documentos entregues.
+  nivelAlcancado NivelAuditoria?
+
+  /// Totais consolidados — recalculados a cada execução do motor.
+  totalDebitoAberto  Decimal? @db.Decimal(18, 2)
+  totalRiscoAutuacao Decimal? @db.Decimal(18, 2)
+  totalRecuperavel   Decimal? @db.Decimal(18, 2)
+
+  executadaEm DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  documentos    Documento[]
+  consolidacoes CompetenciaConsolidada[]
+  achados       Achado[]
+  relatorios    Relatorio[]
+  lacunas       Lacuna[]
+
+  @@index([empresaId])
+  @@index([status])
+}
+
+/// O que NÃO foi analisado, e por quê. O relatório sempre declara isto.
+model Lacuna {
+  id          String    @id @default(cuid())
+  auditoriaId String
+  auditoria   Auditoria @relation(fields: [auditoriaId], references: [id], onDelete: Cascade)
+
+  /// Código do achado ou família que não pôde ser avaliado.
+  escopo          String
+  documentoFaltante TipoDocumento
+  competencia     String? @db.VarChar(7)
+  descricao       String
+
+  @@index([auditoriaId])
+}
+
+// =====================================================================
+// DOCUMENTOS E EXTRAÇÃO
+// =====================================================================
+
+enum TipoDocumento {
+  NFE_XML
+  NFCE_XML
+  NFSE_XML
+  EVENTO_NFE
+  SPED_FISCAL
+  SPED_CONTRIBUICOES
+  ECD
+  ECF
+  DCTF
+  DCTFWEB
+  SITUACAO_FISCAL
+  PGDAS
+  COMPROVANTE_ARRECADACAO
+  ESOCIAL
+  EFD_REINF
+  CARTAO_CNPJ
+  CONTRATO_SOCIAL
+  PLANILHA
+  DESCONHECIDO
+}
+
+enum StatusProcessamento {
+  PENDENTE
+  PROCESSANDO
+  CONCLUIDO
+  ERRO
+  IGNORADO
+}
+
+model Documento {
+  id          String    @id @default(cuid())
+  auditoriaId String
+  auditoria   Auditoria @relation(fields: [auditoriaId], references: [id], onDelete: Cascade)
+
+  nomeArquivo String
+  /// Tipo detectado pelo CONTEÚDO, não pela extensão nem pelo nome.
+  tipo        TipoDocumento
+  tipoInformado TipoDocumento?
+  tamanhoBytes Int
+  /// SHA-256 — impede reprocessar o mesmo arquivo duas vezes.
+  hash        String
+  caminho     String
+  status      StatusProcessamento @default(PENDENTE)
+  parser      String?
+  registrosExtraidos Int  @default(0)
+  erros       Json?
+  metadados   Json?
+
+  processadoEm DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  notas             NotaFiscal[]
+  apuracoesFiscais  ApuracaoFiscal[]
+  apuracoesContrib  ApuracaoContribuicoes[]
+  lancamentos       LancamentoContabil[]
+  saldos            SaldoConta[]
+  apuracoesEcf      ApuracaoEcf[]
+  confissoes        Confissao[]
+  arrecadacoes      Arrecadacao[]
+  pendenciasFiscais PendenciaFiscal[]
+  apuracoesSimples  ApuracaoSimples[]
+
+  @@unique([auditoriaId, hash])
+  @@index([auditoriaId, tipo])
+  @@index([status])
+}
+
+// ---------- Fiscal: documentos emitidos ----------
+
+enum DirecaoNota {
+  ENTRADA
+  SAIDA
+}
+
+enum SituacaoNota {
+  AUTORIZADA
+  CANCELADA
+  DENEGADA
+  INUTILIZADA
+}
+
+model NotaFiscal {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  chave        String?  @db.VarChar(44)
+  modelo       String   @db.VarChar(2) // 55, 65, 57, NFS-e
+  serie        String?
+  numero       String
+  direcao      DirecaoNota
+  situacao     SituacaoNota @default(AUTORIZADA)
+  dataEmissao  DateTime
+  competencia  String   @db.VarChar(7)
+
+  cnpjEmitente     String
+  cnpjDestinatario String?
+  ufDestino        String?
+  consumidorFinal  Boolean?
+  destinatarioContribuinte Boolean?
+
+  valorTotal   Decimal @db.Decimal(18, 2)
+  valorProdutos Decimal? @db.Decimal(18, 2)
+  baseIcms     Decimal? @db.Decimal(18, 2)
+  valorIcms    Decimal? @db.Decimal(18, 2)
+  valorIcmsSt  Decimal? @db.Decimal(18, 2)
+  valorIpi     Decimal? @db.Decimal(18, 2)
+  valorPis     Decimal? @db.Decimal(18, 2)
+  valorCofins  Decimal? @db.Decimal(18, 2)
+  valorIss     Decimal? @db.Decimal(18, 2)
+
+  /// Marcado quando o SPED Fiscal escriturou esta chave (regra B01).
+  escriturada  Boolean @default(false)
+
+  itens NotaFiscalItem[]
+
+  @@index([documentoId])
+  @@index([chave])
+  @@index([competencia, direcao])
+}
+
+model NotaFiscalItem {
+  id     String     @id @default(cuid())
+  notaId String
+  nota   NotaFiscal @relation(fields: [notaId], references: [id], onDelete: Cascade)
+
+  numeroItem  Int
+  codigo      String?
+  descricao   String?
+  ncm         String?  @db.VarChar(8)
+  cfop        String?  @db.VarChar(4)
+  cstIcms     String?  @db.VarChar(3)
+  cstPis      String?  @db.VarChar(2)
+  cstCofins   String?  @db.VarChar(2)
+  quantidade  Decimal? @db.Decimal(18, 4)
+  valorItem   Decimal  @db.Decimal(18, 2)
+  aliqIcms    Decimal? @db.Decimal(9, 4)
+
+  @@index([notaId])
+  @@index([ncm])
+}
+
+// ---------- Fiscal: apuração declarada ----------
+
+/// SPED EFD ICMS/IPI — Bloco E (E110 e afins).
+model ApuracaoFiscal {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  competencia   String  @db.VarChar(7)
+  uf            String?
+
+  debitos       Decimal @db.Decimal(18, 2)
+  creditos      Decimal @db.Decimal(18, 2)
+  saldoCredorAnterior Decimal? @db.Decimal(18, 2)
+  deducoes      Decimal? @db.Decimal(18, 2)
+  /// E110 campo "ICMS a recolher" — o número que a família A confere.
+  icmsARecolher Decimal @db.Decimal(18, 2)
+  saldoCredorTransportar Decimal? @db.Decimal(18, 2)
+
+  registroOrigem String? // "E110"
+  linhaOrigem    Int?
+
+  @@unique([documentoId, competencia])
+  @@index([competencia])
+}
+
+enum TipoContribuicao {
+  PIS
+  COFINS
+}
+
+/// EFD-Contribuições — M200 (PIS) e M600 (COFINS).
+model ApuracaoContribuicoes {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  competencia   String @db.VarChar(7)
+  contribuicao  TipoContribuicao
+
+  baseCalculo   Decimal? @db.Decimal(18, 2)
+  valorApurado  Decimal  @db.Decimal(18, 2)
+  creditos      Decimal? @db.Decimal(18, 2)
+  retencoes     Decimal? @db.Decimal(18, 2)
+  /// Valor a recolher no período.
+  aRecolher     Decimal  @db.Decimal(18, 2)
+
+  registroOrigem String?
+  linhaOrigem    Int?
+
+  @@unique([documentoId, competencia, contribuicao])
+  @@index([competencia])
+}
+
+/// PGDAS-D — Simples Nacional.
+model ApuracaoSimples {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  competencia    String  @db.VarChar(7)
+  rbt12          Decimal @db.Decimal(18, 2)
+  receitaBruta   Decimal @db.Decimal(18, 2)
+  anexo          String?
+  aliquotaEfetiva Decimal? @db.Decimal(9, 4)
+  fatorR         Decimal? @db.Decimal(9, 4)
+  valorDas       Decimal @db.Decimal(18, 2)
+  /// ICMS e ISS destacados fora do DAS quando o sublimite é ultrapassado.
+  icmsForaDas    Decimal? @db.Decimal(18, 2)
+  issForaDas     Decimal? @db.Decimal(18, 2)
+
+  @@unique([documentoId, competencia])
+  @@index([competencia])
+}
+
+// ---------- Contábil ----------
+
+/// ECD — lançamentos do razão (registros I200/I250).
+model LancamentoContabil {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  data        DateTime
+  competencia String  @db.VarChar(7)
+  numeroLancamento String?
+  contaCodigo String
+  contaNome   String?
+  /// "D" ou "C"
+  natureza    String  @db.VarChar(1)
+  valor       Decimal @db.Decimal(18, 2)
+  historico   String?
+
+  linhaOrigem Int?
+
+  @@index([documentoId, competencia])
+  @@index([contaCodigo])
+}
+
+/// ECD — saldos por conta e período (registro I155). É daqui que sai o caixa negativo.
+model SaldoConta {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  competencia    String  @db.VarChar(7)
+  contaCodigo    String
+  contaNome      String?
+  /// Classificação para as regras: CAIXA, BANCO, MUTUO_SOCIO, RECEITA, TRIBUTO...
+  classificacao  String?
+  saldoInicial   Decimal @db.Decimal(18, 2)
+  debitos        Decimal @db.Decimal(18, 2)
+  creditos       Decimal @db.Decimal(18, 2)
+  saldoFinal     Decimal @db.Decimal(18, 2)
+  /// "D" ou "C" — saldo credor em conta de caixa é o achado F01.
+  naturezaSaldo  String  @db.VarChar(1)
+
+  linhaOrigem Int?
+
+  @@unique([documentoId, competencia, contaCodigo])
+  @@index([competencia, classificacao])
+}
+
+/// ECF — apuração de IRPJ e CSLL.
+model ApuracaoEcf {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  exercicio   Int
+  periodo     String @db.VarChar(7) // trimestre ou ano
+  tributo     String @db.VarChar(5) // IRPJ | CSLL
+
+  receitaDeclarada Decimal? @db.Decimal(18, 2)
+  lucroContabil    Decimal? @db.Decimal(18, 2)
+  adicoes          Decimal? @db.Decimal(18, 2)
+  exclusoes        Decimal? @db.Decimal(18, 2)
+  baseCalculo      Decimal  @db.Decimal(18, 2)
+  valorApurado     Decimal  @db.Decimal(18, 2)
+  adicional        Decimal? @db.Decimal(18, 2)
+  deducoes         Decimal? @db.Decimal(18, 2)
+  aPagar           Decimal  @db.Decimal(18, 2)
+
+  registroOrigem String?
+  linhaOrigem    Int?
+
+  @@index([documentoId, exercicio])
+}
+
+// ---------- Confessado e pago ----------
+
+/// DCTF / DCTFWeb — o que foi confessado à Receita.
+model Confissao {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  competencia   String  @db.VarChar(7)
+  tributo       String  @db.VarChar(20)
+  codigoReceita String? @db.VarChar(6)
+  valorDebito   Decimal @db.Decimal(18, 2)
+  /// Vinculações que quitam sem DARF — evitam falso positivo na família A.
+  valorPago        Decimal? @db.Decimal(18, 2)
+  valorCompensado  Decimal? @db.Decimal(18, 2)
+  valorParcelado   Decimal? @db.Decimal(18, 2)
+  valorSuspenso    Decimal? @db.Decimal(18, 2)
+  saldoDevedor     Decimal? @db.Decimal(18, 2)
+
+  @@index([documentoId, competencia])
+  @@index([tributo, competencia])
+}
+
+/// DARF, DAS, DARE-GO, GNRE — o que foi efetivamente pago.
+model Arrecadacao {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  competencia   String   @db.VarChar(7)
+  tributo       String   @db.VarChar(20)
+  codigoReceita String?  @db.VarChar(6)
+  dataPagamento DateTime?
+  dataVencimento DateTime?
+  principal     Decimal  @db.Decimal(18, 2)
+  multa         Decimal? @db.Decimal(18, 2)
+  juros         Decimal? @db.Decimal(18, 2)
+  valorTotal    Decimal  @db.Decimal(18, 2)
+
+  @@index([documentoId, competencia])
+  @@index([tributo, competencia])
+}
+
+/// Relatório de Situação Fiscal do e-CAC — pendências em aberto.
+model PendenciaFiscal {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  competencia   String? @db.VarChar(7)
+  tributo       String? @db.VarChar(20)
+  descricao     String
+  /// DEBITO | OMISSAO_DECLARACAO | PARCELAMENTO | DIVIDA_ATIVA | MALHA
+  natureza      String
+  valor         Decimal? @db.Decimal(18, 2)
+  situacao      String?
+
+  @@index([documentoId])
+}
+
+// =====================================================================
+// CONSOLIDAÇÃO — o coração do sistema
+// =====================================================================
+
+/// Visão única por competência e tributo: o que foi apurado, confessado, pago e
+/// qual a receita real. Com esta tabela pronta, a família A do catálogo vira uma
+/// comparação de colunas — rápida, testável e com evidência anexada.
+model CompetenciaConsolidada {
+  id          String    @id @default(cuid())
+  auditoriaId String
+  auditoria   Auditoria @relation(fields: [auditoriaId], references: [id], onDelete: Cascade)
+
+  competencia String @db.VarChar(7)
+  tributo     String @db.VarChar(20)
+
+  apurado    Decimal? @db.Decimal(18, 2)
+  confessado Decimal? @db.Decimal(18, 2)
+  pago       Decimal? @db.Decimal(18, 2)
+  compensado Decimal? @db.Decimal(18, 2)
+  parcelado  Decimal? @db.Decimal(18, 2)
+  suspenso   Decimal? @db.Decimal(18, 2)
+  emAberto   Decimal? @db.Decimal(18, 2)
+
+  receitaReal        Decimal? @db.Decimal(18, 2)
+  receitaEscriturada Decimal? @db.Decimal(18, 2)
+  receitaContabil    Decimal? @db.Decimal(18, 2)
+
+  /// De onde veio cada número: [{campo, fonte, documentoId, registro, linha}]
+  origens Json?
+
+  @@unique([auditoriaId, competencia, tributo])
+  @@index([auditoriaId, competencia])
+}
+
+// =====================================================================
+// ACHADOS
+// =====================================================================
+
+enum Severidade {
+  CRITICO
+  ALTO
+  MEDIO
+  BAIXO
+  OPORTUNIDADE
+}
+
+enum Confianca {
+  ALTA
+  MEDIA
+  BAIXA
+}
+
+enum SituacaoPrescricional {
+  EXIGIVEL
+  A_DECAIR
+  DECAIDO
+}
+
+model Achado {
+  id          String    @id @default(cuid())
+  auditoriaId String
+  auditoria   Auditoria @relation(fields: [auditoriaId], references: [id], onDelete: Cascade)
+
+  /// Código do catálogo: A01, B03, F01... Ver docs/CATALOGO_ACHADOS.md
+  codigo    String @db.VarChar(6)
+  titulo    String
+  familia   String
+  severidade Severidade
+  confianca  Confianca @default(ALTA)
+
+  tributo     String? @db.VarChar(20)
+  competencia String? @db.VarChar(7)
+  exercicio   Int?
+
+  descricao String
+  /// Frase pronta para a apresentação ao cliente.
+  textoCliente String?
+  recomendacao String?
+
+  valorExposicao  Decimal? @db.Decimal(18, 2)
+  valorAtualizado Decimal? @db.Decimal(18, 2)
+
+  baseLegal String[] @default([])
+
+  situacaoPrescricional SituacaoPrescricional @default(EXIGIVEL)
+  decaiEm               DateTime?
+  /// Qual regra de contagem foi usada: "CTN art. 173, I" ou "CTN art. 150, § 4º".
+  regraDecadencia       String?
+
+  /// Quando a confiança não é ALTA, o que precisa ser conferido.
+  ressalva String?
+
+  createdAt DateTime @default(now())
+
+  evidencias Evidencia[]
+
+  @@index([auditoriaId, severidade])
+  @@index([auditoriaId, codigo])
+  @@index([competencia])
+}
+
+/// Rastro até o documento do cliente. Achado sem evidência não entra no relatório.
+model Evidencia {
+  id       String @id @default(cuid())
+  achadoId String
+  achado   Achado @relation(fields: [achadoId], references: [id], onDelete: Cascade)
+
+  documentoId String?
+  arquivo     String
+  registro    String?
+  linha       Int?
+  campo       String?
+  valor       String?
+  observacao  String?
+
+  @@index([achadoId])
+}
+
+// =====================================================================
+// RELATÓRIO
+// =====================================================================
+
+enum FormatoRelatorio {
+  TELA
+  PDF
+  XLSX
+  APRESENTACAO
+}
+
+model Relatorio {
+  id          String    @id @default(cuid())
+  auditoriaId String
+  auditoria   Auditoria @relation(fields: [auditoriaId], references: [id], onDelete: Cascade)
+
+  formato   FormatoRelatorio
+  caminho   String?
+  geradoEm  DateTime @default(now())
+  /// Cópia dos totais no momento da geração — o relatório entregue não muda depois.
+  snapshot  Json?
+
+  @@index([auditoriaId])
+}
+
+// =====================================================================
+// TRILHA
+// =====================================================================
+
+model LogAuditoria {
+  id        String   @id @default(cuid())
+  usuarioId String?
+  acao      String
+  entidade  String
+  entidadeId String?
+  detalhes  Json?
+  criadoEm  DateTime @default(now())
+
+  @@index([entidade, entidadeId])
+  @@index([criadoEm])
+}

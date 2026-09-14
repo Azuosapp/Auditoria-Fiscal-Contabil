@@ -1,0 +1,84 @@
+# Continuar daqui
+
+**Sessão de 14/09/2026.** A próxima sessão começa sem memória desta. Leia este arquivo
+primeiro, depois `ARQUITETURA.md` e `CATALOGO_ACHADOS.md`.
+
+## O que foi feito nesta sessão
+
+1. **GitHub conectado** — conta `thyagosouzaoficial`, via fluxo de dispositivo OAuth.
+   O `gh` CLI **não** está no PATH do sistema; fica em
+   `C:\Users\Grupo Azuos\AppData\Local\azuos-tools\gh\bin\gh.exe`.
+   O `winget` falhou nesta rede (erro de certificado na fonte `msstore` e travamento na
+   fonte `winget`) — o download direto do release funcionou.
+
+2. **Padrão visual Azuos localizado e extraído.** Está em
+   `github.com/thyagosouzaoficial/asaas-dashboard` → `dashboard-azuos.html`.
+   Azul `#183a83` + dourado `#f0e915`, fonte Inter, corpo 12px.
+   ⚠️ **O `azuos-tax-engine` está fora do padrão** (usa verde `#137a5e`). Vale corrigir
+   em tarefa própria, quando o usuário quiser.
+
+3. **Projeto criado e de pé.** Next 14 + Prisma + Postgres, banco `azuos_audit`,
+   migration `init` aplicada, build limpo, 155 testes passando, 5 rotas respondendo
+   HTTP 200 em `localhost:3001`.
+
+4. **Parsers portados do tax-engine** — NF-e/NFC-e, SPED EFD ICMS/IPI, EFD-Contribuições,
+   NFS-e, PGDAS, planilha, além de `decimal.ts` e `creditos-pis-cofins.ts`. Foram
+   **copiados**, não importados: os dois sistemas ficam independentes. O único ajuste
+   foi `src/server/extraction/tipos-prisma.ts`, que substitui os enums do schema antigo.
+
+## Próximo passo, em ordem
+
+### 1. Parsers que faltam — é o gargalo
+
+Sem eles, metade do catálogo não roda. Ordem de valor:
+
+| Parser | Por que primeiro | Leiaute |
+|---|---|---|
+| `arrecadacao.ts` | **Desbloqueia a família A inteira** (8 achados críticos) — sem saber o que foi pago, nada se prova | DARF, DAS, DARE-GO |
+| `situacao-fiscal.ts` | Achado A08 sozinho já ganha reunião: débito que o cliente não sabia | PDF do e-CAC |
+| `ecd.ts` | Abre a família F (caixa negativo, passivo fictício) | SPED Contábil — registros I155, I200, I250, J100, J150 |
+| `ecf.ts` | IRPJ/CSLL apurado; fecha A04 e B09 | Blocos L, M, N, P |
+| `dctf.ts` | O "confessado" da regra de ouro | DCTF e DCTFWeb |
+
+> Confirmar o leiaute vigente em `sped.rfb.gov.br` **pelo PowerShell** — o WebFetch é
+> bloqueado para o domínio; o PowerShell responde HTTP 200. Ver a tabela de fontes no
+> `CONTINUAR_AQUI.md` do `azuos-tax-engine`.
+
+### 2. Consolidação
+
+`src/server/auditoria/consolidar.ts` — monta `CompetenciaConsolidada` por competência e
+tributo, com as colunas apurado / confessado / pago / receita real e o campo `origens`
+apontando arquivo, registro e linha. **É o que torna o motor viável**: com essa tabela
+pronta, a família A vira comparação de colunas.
+
+### 3. Motor
+
+`src/server/auditoria/motor.ts` + `regras/familia-*.ts`. Uma função por família, cada
+uma devolvendo achados carimbados com o código do catálogo. Teste unitário obrigatório
+por regra, com o caso que deve disparar **e** o caso que não deve.
+
+Começar pela família A: é onde estão os 8 achados críticos e onde a lógica já está
+desenhada.
+
+### 4. Prescrição, importação e relatório
+
+`prescricao.ts` (art. 173, I × art. 150, § 4º do CTN), a tela de importação com os
+botões por tipo de documento, e o relatório em três camadas.
+
+## Armadilhas já conhecidas
+
+- **Porta 3000 é do `azuos-tax-engine`.** Este projeto roda na 3001, já fixado no
+  `package.json` e no `.env`.
+- **Heredoc do Git Bash quebra com apóstrofo** em texto português. Usar a ferramenta de
+  escrita de arquivo, não `cat <<EOF`, para conteúdo com acentuação e apóstrofo.
+- **Falso positivo na família A** é o maior risco do produto. Um relatório que acusa
+  débito já compensado destrói a credibilidade na reunião. Sem o documento que comprova
+  a vinculação, o achado sai com confiança MÉDIA e ressalva explícita.
+- **Não versionar `.env`** — contém a senha do banco.
+
+## Antes de dar qualquer número ao cliente
+
+O catálogo cita base legal com data-base **06/08/2026**, vinda dos pacotes do Drive
+(`AGENTES CLAUDE`). Ao gerar relatório de verdade, rodar os agentes da área tocada —
+Federal para IRPJ/CSLL/PIS/COFINS, Azuos para ICMS de Goiás, PROGOIÁS para indústria
+incentivada, IBS/CBS quando o período alcançar 2026 em diante.

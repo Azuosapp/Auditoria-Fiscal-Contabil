@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+build
+.DS_Store
+*.pem
+npm-debug.log*
+.env
+.env*.local
+storage/*
+!storage/.gitkeep
+/coverage
+next-env.d.ts
+prisma/*.db

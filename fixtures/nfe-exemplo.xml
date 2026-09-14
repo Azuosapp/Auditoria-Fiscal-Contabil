@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
+  <NFe>
+    <infNFe Id="NFe52240111222333000181550010000001231000001234" versao="4.00">
+      <ide>
+        <cUF>52</cUF>
+        <natOp>VENDA DE MERCADORIA</natOp>
+        <mod>55</mod>
+        <serie>1</serie>
+        <nNF>123</nNF>
+        <dhEmi>2024-03-15T10:30:00-03:00</dhEmi>
+        <tpNF>1</tpNF>
+      </ide>
+      <emit>
+        <CNPJ>11222333000181</CNPJ>
+        <xNome>Comercial Exemplo Ltda</xNome>
+        <enderEmit>
+          <UF>GO</UF>
+        </enderEmit>
+      </emit>
+      <dest>
+        <CNPJ>44555666000199</CNPJ>
+        <xNome>Cliente Destino SA</xNome>
+        <enderDest>
+          <UF>SP</UF>
+        </enderDest>
+      </dest>
+      <det nItem="1">
+        <prod>
+          <cProd>P001</cProd>
+          <xProd>Produto Exemplo A</xProd>
+          <NCM>85171231</NCM>
+          <CEST>2104700</CEST>
+          <CFOP>6102</CFOP>
+          <qCom>10.0000</qCom>
+          <vUnCom>50.000000</vUnCom>
+          <vProd>500.00</vProd>
+        </prod>
+        <imposto>
+          <ICMS>
+            <ICMS00>
+              <orig>0</orig>
+              <CST>00</CST>
+              <vBC>500.00</vBC>
+              <pICMS>7.00</pICMS>
+              <vICMS>35.00</vICMS>
+            </ICMS00>
+          </ICMS>
+          <IPI>
+            <IPITrib>
+              <vBC>500.00</vBC>
+              <pIPI>5.00</pIPI>
+              <vIPI>25.00</vIPI>
+            </IPITrib>
+          </IPI>
+          <PIS>
+            <PISAliq>
+              <CST>01</CST>
+              <vBC>500.00</vBC>
+              <pPIS>1.65</pPIS>
+              <vPIS>8.25</vPIS>
+            </PISAliq>
+          </PIS>
+          <COFINS>
+            <COFINSAliq>
+              <CST>01</CST>
+              <vBC>500.00</vBC>
+              <pCOFINS>7.60</pCOFINS>
+              <vCOFINS>38.00</vCOFINS>
+            </COFINSAliq>
+          </COFINS>
+        </imposto>
+      </det>
+      <det nItem="2">
+        <prod>
+          <cProd>P002</cProd>
+          <xProd>Produto Exemplo B</xProd>
+          <NCM>39269090</NCM>
+          <CFOP>6102</CFOP>
+          <qCom>5.0000</qCom>
+          <vUnCom>20.000000</vUnCom>
+          <vProd>100.00</vProd>
+        </prod>
+        <imposto>
+          <ICMS>
+            <ICMS00>
+              <orig>0</orig>
+              <CST>00</CST>
+              <vBC>100.00</vBC>
+              <pICMS>7.00</pICMS>
+              <vICMS>7.00</vICMS>
+            </ICMS00>
+          </ICMS>
+          <PIS>
+            <PISAliq>
+              <CST>01</CST>
+              <vBC>100.00</vBC>
+              <pPIS>1.65</pPIS>
+              <vPIS>1.65</vPIS>
+            </PISAliq>
+          </PIS>
+          <COFINS>
+            <COFINSAliq>
+              <CST>01</CST>
+              <vBC>100.00</vBC>
+              <pCOFINS>7.60</pCOFINS>
+              <vCOFINS>7.60</vCOFINS>
+            </COFINSAliq>
+          </COFINS>
+        </imposto>
+      </det>
+      <total>
+        <ICMSTot>
+          <vBC>600.00</vBC>
+          <vICMS>42.00</vICMS>
+          <vProd>600.00</vProd>
+          <vIPI>25.00</vIPI>
+          <vPIS>9.90</vPIS>
+          <vCOFINS>45.60</vCOFINS>
+          <vFCP>0.00</vFCP>
+          <vNF>625.00</vNF>
+        </ICMSTot>
+      </total>
+    </infNFe>
+  </NFe>
+</nfeProc>
