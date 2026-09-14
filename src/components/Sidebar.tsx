@@ -15,6 +15,7 @@ const SECOES: Secao[] = [
   {
     titulo: "Auditoria",
     itens: [
+      { href: "/importar", rotulo: "Importar arquivos", icone: "⭳" },
       { href: "/auditorias", rotulo: "Auditorias", icone: "▤" },
       { href: "/empresas", rotulo: "Empresas", icone: "▣" },
     ],

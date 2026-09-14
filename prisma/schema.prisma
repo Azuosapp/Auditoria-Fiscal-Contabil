@@ -712,3 +712,37 @@ model LogAuditoria {
   @@index([entidade, entidadeId])
   @@index([criadoEm])
 }
+
+// =====================================================================
+// IMPORTAÇÃO
+// =====================================================================
+
+enum StatusLote {
+  ANALISADO
+  CONFIRMADO
+  DESCARTADO
+}
+
+/// Lote de arquivos recebidos antes de existir empresa ou auditoria.
+///
+/// O usuário solta 5 anos de documentos e o sistema deduz de quem são. Como a
+/// dedução precisa ser confirmada antes de criar a empresa, os arquivos ficam
+/// aqui entre a análise e a confirmação — evitando um segundo upload de
+/// centenas de megabytes.
+model LoteImportacao {
+  id String @id @default(cuid())
+
+  status      StatusLote @default(ANALISADO)
+  caminho     String
+  totalArquivos Int      @default(0)
+  totalBytes  BigInt     @default(0)
+
+  /// Resultado da análise: identidade deduzida, período, regimes, tipos lidos.
+  analise Json?
+
+  auditoriaId String?
+  criadoEm    DateTime @default(now())
+  confirmadoEm DateTime?
+
+  @@index([status])
+}
