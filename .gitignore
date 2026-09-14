@@ -12,3 +12,6 @@ storage/*
 /coverage
 next-env.d.ts
 prisma/*.db
+
+# Artefato incremental do tsc — muda a cada build.
+*.tsbuildinfo
