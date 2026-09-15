@@ -1,9 +1,41 @@
 # Continuar daqui
 
-**Sessão de 14/09/2026.** A próxima sessão começa sem memória desta. Leia este arquivo
+**Última sessão: 15/09/2026.** A próxima sessão começa sem memória desta. Leia este arquivo
 primeiro, depois `ARQUITETURA.md` e `CATALOGO_ACHADOS.md`.
 
-## O que foi feito nesta sessão
+## Sessão de 15/09/2026 — extração
+
+O processamento existe e foi provado de ponta a ponta. Os arquivos importados
+viram notas, itens, eventos e apurações no banco.
+
+**Duas falhas encontradas e corrigidas — ambas do tipo que passa em silêncio:**
+
+1. **Competência deslocada um mês.** Os parsers constroem as datas com
+   `Date.UTC`; a conversão para competência lia com `getFullYear()`/`getMonth()`,
+   que são locais. Em UTC-3, 01/01 à meia-noite UTC é 31/12 às 21h — e como toda
+   escrituração mensal começa no dia 1º, TODA apuração caía no mês anterior. Uma
+   EFD de janeiro/2026 foi gravada em 2025-12. A competência é a chave de todo
+   cruzamento: o relatório inteiro sairia deslocado. Corrigido para leitura em
+   UTC, com teste de regressão.
+
+2. **Mapa de posições da ECF errado.** A ECF tem `COD_VER` no campo 3 e a ECD
+   não tem, o que desloca CNPJ, nome e datas em uma posição entre os dois
+   leiautes. O mapa fora escrito assumindo a mesma sequência da ECD. Conferido
+   no Manual do Leiaute 12 da ECF (ADE Cofis nº 02/2026): CNPJ é o campo 4,
+   DT_INI o 10 e DT_FIN o 11. A ECD foi conferida no Manual do Leiaute 9
+   (21/12/2023) e estava correta.
+
+> **Lição para os próximos parsers:** teste com linha escrita à mão é circular —
+> se o mapa está errado, a linha tende a nascer com o mesmo erro. Os mapas agora
+> são validados também contra arquivo real, cruzando a leitura rápida do 0000
+> com o que o parser completo extrai do mesmo arquivo.
+
+**Provado com cenário real:** SPED Fiscal + XML escriturado + XML não escriturado
++ evento de cancelamento. Resultado: a nota cancelada foi marcada CANCELADA, o
+XML presente no SPED foi marcado escriturado, e o XML ausente ficou como achado
+B01. O processamento é idempotente — três execuções seguidas não duplicaram nada.
+
+## O que foi feito na sessão de 14/09/2026
 
 1. **GitHub conectado** — conta `thyagosouzaoficial`, via fluxo de dispositivo OAuth.
    O `gh` CLI **não** está no PATH do sistema; fica em
@@ -28,7 +60,7 @@ primeiro, depois `ARQUITETURA.md` e `CATALOGO_ACHADOS.md`.
 
 ## Próximo passo, em ordem
 
-### 1. Parsers que faltam — é o gargalo
+### 1. Parsers que faltam — continua sendo o gargalo
 
 Sem eles, metade do catálogo não roda. Ordem de valor:
 

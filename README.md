@@ -33,13 +33,17 @@ sobe com o Windows). Usuário `azuos`, senha em `.env`.
 ```
 ✓ Modelo de dados completo         21 tabelas, migration aplicada
 ✓ Parsers portados do tax-engine   NF-e, SPED Fiscal, EFD-Contribuições, NFS-e,
-                                   PGDAS, planilha — 155 testes passando
+                                   PGDAS, planilha — 178 testes passando
 ✓ Padrão visual Azuos              extraído do GitHub, aplicado
 ✓ Catálogo de achados              32 achados em 7 famílias, tipado
-✓ Telas                            auditorias, empresas, catálogo, documentos exigidos
+✓ Telas                            importação, auditorias, empresas, catálogo
+✓ Importação com criação automática da empresa a partir dos arquivos
+✓ Extração para o banco               notas, itens, eventos, apuração de ICMS,
+                                      PIS/COFINS e Simples — idempotente
+✓ Reconciliação                       cancelamento por evento e XML × escrituração
 ✗ Parsers de ECD, ECF, DCTF, Situação Fiscal e arrecadação
-✗ Consolidação e motor de regras
-✗ Importação por tela e relatório
+✗ Consolidação (apurado × confessado × pago) e motor de regras
+✗ Relatório
 ```
 
 ## Documentação

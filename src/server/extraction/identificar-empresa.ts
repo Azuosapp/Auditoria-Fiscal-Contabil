@@ -188,12 +188,21 @@ export function normalizarCnpj(v?: string | null): string | undefined {
   return d.length === 14 ? d : undefined;
 }
 
-/** Data (Date, "AAAA-MM-DD" ou "DDMMAAAA" do SPED) → "AAAA-MM". */
+/**
+ * Data (Date, "AAAA-MM-DD" ou "DDMMAAAA" do SPED) → "AAAA-MM".
+ *
+ * A leitura é em UTC, e isso NÃO é detalhe. Os parsers constroem as datas com
+ * `Date.UTC`, enquanto `getFullYear()`/`getMonth()` devolvem o horário local —
+ * em UTC-3, o dia 1º de janeiro à meia-noite UTC é 31 de dezembro às 21h local.
+ * Lido assim, todo período que começa no dia 1º (isto é, toda escrituração
+ * mensal) cairia no mês anterior, e a competência é a chave de TODO cruzamento
+ * da auditoria: a apuração iria parar no mês errado, silenciosamente.
+ */
 export function paraCompetencia(v?: Date | string | null): string | undefined {
   if (!v) return undefined;
   if (v instanceof Date) {
     if (Number.isNaN(v.getTime())) return undefined;
-    return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}`;
+    return `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, "0")}`;
   }
   const s = String(v).trim();
   if (/^\d{8}$/.test(s)) return `${s.slice(4, 8)}-${s.slice(2, 4)}`;
@@ -219,10 +228,16 @@ const POSICOES: Record<
   SPED_FISCAL: { cnpj: 7, nome: 6, uf: 9, ie: 10, mun: 11, dtIni: 4, dtFim: 5 },
   // |0000|COD_VER|TIPO_ESCRIT|IND_SIT_ESP|NUM_REC|DT_INI|DT_FIN|NOME|CNPJ|UF|COD_MUN|...
   SPED_CONTRIBUICOES: { cnpj: 9, nome: 8, uf: 10, mun: 11, dtIni: 6, dtFim: 7 },
-  // |0000|LECD|DT_INI|DT_FIN|NOME|CNPJ|UF|IE|COD_MUN|IM|...
+  // |0000|LECD|DT_INI|DT_FIN|NOME|CNPJ|UF|IE|COD_MUN|IM|IND_SIT_ESP|...
+  // Conferido no Manual de Orientação do Leiaute 9 da ECD (21/12/2023).
   ECD: { cnpj: 6, nome: 5, uf: 7, ie: 8, mun: 9, dtIni: 3, dtFim: 4 },
-  // |0000|LECF|CNPJ|NOME|IND_SIT_INI_PER|SIT_ESPECIAL|PAT_REMAN_CIS|DT_SIT_ESP|DT_INI|DT_FIN|...
-  ECF: { cnpj: 3, nome: 4, dtIni: 9, dtFim: 10 },
+  // |0000|LECF|COD_VER|CNPJ|NOME|IND_SIT_INI_PER|SIT_ESPECIAL|PAT_REMAN_CIS|DT_SIT_ESP|DT_INI|DT_FIN|...
+  //
+  // Atenção ao COD_VER no campo 3: ele existe na ECF e NÃO na ECD, o que
+  // desloca CNPJ, nome e datas em uma posição entre os dois leiautes. Conferido
+  // no Manual de Orientação do Leiaute 12 da ECF (Anexo ao ADE Cofis nº 02/2026,
+  // atualização de abril/2026), p. 61-63.
+  ECF: { cnpj: 4, nome: 5, dtIni: 10, dtFim: 11 },
 };
 
 export interface Registro0000 {

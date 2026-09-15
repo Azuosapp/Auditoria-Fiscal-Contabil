@@ -263,6 +263,7 @@ model Documento {
   arrecadacoes      Arrecadacao[]
   pendenciasFiscais PendenciaFiscal[]
   apuracoesSimples  ApuracaoSimples[]
+  eventos           EventoNfe[]
 
   @@unique([auditoriaId, hash])
   @@index([auditoriaId, tipo])
@@ -274,6 +275,15 @@ model Documento {
 enum DirecaoNota {
   ENTRADA
   SAIDA
+}
+
+/// De onde a nota veio. O achado B01 confronta um lado com o outro: sem
+/// distinguir a origem, o cruzamento compararia a nota com ela mesma.
+enum OrigemNota {
+  /// XML autorizado pela SEFAZ — o que a empresa realmente emitiu ou recebeu.
+  XML_AUTORIZADO
+  /// Registro C100 do SPED Fiscal — o que a contabilidade escriturou.
+  ESCRITURACAO
 }
 
 enum SituacaoNota {
@@ -293,6 +303,7 @@ model NotaFiscal {
   serie        String?
   numero       String
   direcao      DirecaoNota
+  origem       OrigemNota
   situacao     SituacaoNota @default(AUTORIZADA)
   dataEmissao  DateTime
   competencia  String   @db.VarChar(7)
@@ -321,6 +332,31 @@ model NotaFiscal {
   @@index([documentoId])
   @@index([chave])
   @@index([competencia, direcao])
+  @@index([origem, chave])
+}
+
+/// Evento de NF-e (cancelamento, carta de correção, manifestação).
+///
+/// NÃO é nota: é documento à parte que se refere a uma nota pela chave, e chega
+/// no MESMO pacote das notas. Tratar evento como nota infla o faturamento;
+/// ignorá-lo faz nota cancelada seguir contando como receita.
+model EventoNfe {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  chave       String   @db.VarChar(44)
+  tipoEvento  String   @db.VarChar(6)
+  descricao   String?
+  dataEvento  DateTime?
+  sequencia   Int?
+  autorDoc    String?
+  protocolo   String?
+  /// Só o evento 110111 cancela.
+  cancelaNota Boolean  @default(false)
+
+  @@index([documentoId])
+  @@index([chave])
 }
 
 model NotaFiscalItem {

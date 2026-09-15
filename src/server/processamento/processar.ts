@@ -1,0 +1,439 @@
+import { readFile } from "node:fs/promises";
+import { Prisma, type OrigemNota, type TipoDocumento } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { parseNfeXml } from "@/server/extraction/nfe-xml";
+import { parseNfseXml } from "@/server/extraction/nfse-xml";
+import { parseSpedEfd } from "@/server/extraction/sped";
+import {
+  parseSpedContribuicoes,
+  type ExtractionResultSpedContribuicoes,
+} from "@/server/extraction/sped-contribuicoes";
+import { parseExtratoPgdas, ehExtratoPgdas } from "@/server/extraction/pgdas-extrato";
+import { pdfBufferParaTexto } from "@/server/extraction/pdf-texto";
+import { decodeTextBuffer } from "@/server/extraction/encoding";
+import { ehZip } from "@/server/extraction/zip";
+import { classificar } from "@/server/extraction/classificar";
+import type { ExtractionResult } from "@/server/extraction/types";
+import {
+  contagemVazia,
+  persistirApuracaoContribuicoes,
+  persistirApuracaoIcms,
+  persistirEventos,
+  persistirNotas,
+  persistirPgdas,
+  reconciliar,
+  somarContagens,
+  totalDe,
+  type ContagemPersistida,
+} from "./persistir";
+
+/**
+ * Processamento: transforma os arquivos importados em dados consultáveis.
+ *
+ * Um documento com defeito NUNCA derruba os outros. Numa auditoria de 5 anos, um
+ * XML corrompido no meio de 40 mil não pode custar o trabalho inteiro: ele é
+ * marcado como ERRO, com a mensagem, e a fila segue.
+ */
+
+export interface ResultadoProcessamento {
+  processados: number;
+  comErro: number;
+  ignorados: number;
+  registros: ContagemPersistida;
+  reconciliacao: { canceladas: number; escrituradas: number };
+  erros: { documento: string; mensagem: string }[];
+}
+
+/** Tipos que ainda não têm parser. Viram IGNORADO com motivo, não erro. */
+const SEM_PARSER: Partial<Record<TipoDocumento, string>> = {
+  ECD: "Parser de ECD (SPED Contábil) ainda não implementado.",
+  ECF: "Parser de ECF ainda não implementado.",
+  DCTF: "Parser de DCTF ainda não implementado.",
+  DCTFWEB: "Parser de DCTFWeb ainda não implementado.",
+  SITUACAO_FISCAL: "Parser do relatório de situação fiscal ainda não implementado.",
+  COMPROVANTE_ARRECADACAO:
+    "Parser de comprovante de arrecadação (DARF/DAS/DARE) ainda não implementado.",
+  ESOCIAL: "Parser de eSocial ainda não implementado.",
+  EFD_REINF: "Parser de EFD-Reinf ainda não implementado.",
+  CARTAO_CNPJ: "Cartão CNPJ é guardado para consulta; não há extração automática.",
+  CONTRATO_SOCIAL: "Contrato social é guardado para consulta; não há extração automática.",
+  PLANILHA: "Planilha exige mapeamento de contas; não é processada automaticamente.",
+  DESCONHECIDO: "Conteúdo não reconhecido.",
+};
+
+export interface OpcoesProcessamento {
+  /**
+   * Relê também os documentos já concluídos. Necessário depois de corrigir um
+   * parser: sem isso, o dado errado gravado na leitura anterior continuaria lá.
+   */
+  reprocessarTudo?: boolean;
+}
+
+export async function processarAuditoria(
+  auditoriaId: string,
+  opcoes: OpcoesProcessamento = {},
+): Promise<ResultadoProcessamento> {
+  const auditoria = await prisma.auditoria.findUnique({
+    where: { id: auditoriaId },
+    include: { empresa: true },
+  });
+  if (!auditoria) throw new Error("Auditoria não encontrada.");
+
+  const cnpjEmpresa = auditoria.empresa.cnpj;
+  const uf = auditoria.empresa.uf ?? undefined;
+
+  const pendentes = await prisma.documento.findMany({
+    where: opcoes.reprocessarTudo
+      ? { auditoriaId }
+      : { auditoriaId, status: { in: ["PENDENTE", "ERRO"] } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  await prisma.auditoria.update({
+    where: { id: auditoriaId },
+    data: { status: "PROCESSANDO" },
+  });
+
+  let registros = contagemVazia();
+  let processados = 0;
+  let comErro = 0;
+  let ignorados = 0;
+  const erros: { documento: string; mensagem: string }[] = [];
+
+  for (const doc of pendentes) {
+    const motivoSemParser = SEM_PARSER[doc.tipo];
+
+    try {
+      const buffer = await readFile(doc.caminho);
+
+      // Pacote: o documento registrado é o .zip, mas o conteúdo é que importa.
+      const ehPacote = ehZip(buffer) && doc.tipo === "DESCONHECIDO";
+
+      if (motivoSemParser && !ehPacote) {
+        await prisma.documento.update({
+          where: { id: doc.id },
+          data: {
+            status: "IGNORADO",
+            erros: [motivoSemParser] as Prisma.InputJsonValue,
+            processadoEm: new Date(),
+          },
+        });
+        ignorados += 1;
+        continue;
+      }
+
+      const contagem = await processarDocumento(
+        doc.id,
+        doc.tipo,
+        doc.nomeArquivo,
+        buffer,
+        cnpjEmpresa,
+        uf,
+        ehPacote,
+      );
+
+      registros = somarContagens(registros, contagem);
+      processados += 1;
+    } catch (e) {
+      const mensagem = (e as Error).message;
+      await prisma.documento.update({
+        where: { id: doc.id },
+        data: {
+          status: "ERRO",
+          erros: [mensagem] as Prisma.InputJsonValue,
+          processadoEm: new Date(),
+        },
+      });
+      comErro += 1;
+      erros.push({ documento: doc.nomeArquivo, mensagem });
+    }
+  }
+
+  // Só agora, com todos os arquivos lidos, dá para cruzar evento com nota e
+  // XML com escrituração: cada lado estava num documento diferente.
+  const reconciliacao = await reconciliar(auditoriaId);
+
+  await prisma.auditoria.update({
+    where: { id: auditoriaId },
+    data: { status: "PRONTA", executadaEm: new Date() },
+  });
+
+  return { processados, comErro, ignorados, registros, reconciliacao, erros };
+}
+
+async function processarDocumento(
+  documentoId: string,
+  tipo: TipoDocumento,
+  nomeArquivo: string,
+  buffer: Buffer,
+  cnpjEmpresa: string,
+  uf: string | undefined,
+  ehPacote: boolean,
+): Promise<ContagemPersistida> {
+  // Idempotência: apaga o que ESTE documento produziu antes de reler.
+  // Sem isso, reprocessar duplicaria notas, itens e apurações — e o
+  // totalizador do relatório passaria a contar a mesma nota duas vezes.
+  await limparExtracaoAnterior(documentoId);
+
+  await prisma.documento.update({
+    where: { id: documentoId },
+    data: { status: "PROCESSANDO" },
+  });
+
+  const avisos: string[] = [];
+  let contagem = contagemVazia();
+  let parser = "";
+
+  if (ehPacote) {
+    parser = "zip";
+    contagem = await processarPacote(
+      documentoId,
+      buffer,
+      nomeArquivo,
+      cnpjEmpresa,
+      uf,
+      avisos,
+    );
+  } else {
+    const r = await processarUnico(documentoId, tipo, buffer, cnpjEmpresa, uf);
+    parser = r.parser;
+    contagem = r.contagem;
+    avisos.push(...r.avisos);
+  }
+
+  await prisma.documento.update({
+    where: { id: documentoId },
+    data: {
+      status: "CONCLUIDO",
+      parser,
+      registrosExtraidos: totalDe(contagem),
+      erros: avisos.length > 0 ? (avisos as Prisma.InputJsonValue) : Prisma.DbNull,
+      processadoEm: new Date(),
+      metadados: {
+        notas: contagem.notas,
+        itens: contagem.itens,
+        apuracoesIcms: contagem.apuracoesIcms,
+        apuracoesContribuicoes: contagem.apuracoesContribuicoes,
+        apuracoesSimples: contagem.apuracoesSimples,
+        eventos: contagem.eventos,
+      },
+    },
+  });
+
+  return contagem;
+}
+
+/**
+ * Remove tudo que uma leitura anterior deste documento gravou.
+ *
+ * Os itens de nota caem por cascade a partir de `NotaFiscal`; os demais são
+ * apagados diretamente, cada um pela chave do documento.
+ */
+async function limparExtracaoAnterior(documentoId: string) {
+  await prisma.$transaction([
+    prisma.notaFiscal.deleteMany({ where: { documentoId } }),
+    prisma.eventoNfe.deleteMany({ where: { documentoId } }),
+    prisma.apuracaoFiscal.deleteMany({ where: { documentoId } }),
+    prisma.apuracaoContribuicoes.deleteMany({ where: { documentoId } }),
+    prisma.apuracaoSimples.deleteMany({ where: { documentoId } }),
+  ]);
+}
+
+async function processarUnico(
+  documentoId: string,
+  tipo: TipoDocumento,
+  buffer: Buffer,
+  cnpjEmpresa: string,
+  uf: string | undefined,
+): Promise<{ parser: string; contagem: ContagemPersistida; avisos: string[] }> {
+  switch (tipo) {
+    case "NFE_XML":
+    case "NFCE_XML":
+    case "EVENTO_NFE": {
+      const r = parseNfeXml(decodeTextBuffer(buffer).text, "SAIDA", {
+        cnpjEmpresa,
+      });
+      const contagem = await gravarExtracao(
+        documentoId,
+        r,
+        "XML_AUTORIZADO",
+        cnpjEmpresa,
+        uf,
+      );
+      return { parser: "nfe-xml", contagem, avisos: r.warnings };
+    }
+
+    case "NFSE_XML": {
+      const r = parseNfseXml(buffer, "SAIDA");
+      const contagem = await gravarExtracao(
+        documentoId,
+        r,
+        "XML_AUTORIZADO",
+        cnpjEmpresa,
+        uf,
+      );
+      return { parser: "nfse-xml", contagem, avisos: r.warnings };
+    }
+
+    case "SPED_FISCAL": {
+      const r = parseSpedEfd(buffer);
+      // As notas do SPED são o que a contabilidade ESCRITUROU — é contra isto
+      // que os XMLs autorizados são confrontados.
+      const contagem = await gravarExtracao(
+        documentoId,
+        r,
+        "ESCRITURACAO",
+        cnpjEmpresa,
+        r.identification?.uf ?? uf,
+      );
+      return { parser: "sped", contagem, avisos: r.warnings };
+    }
+
+    case "SPED_CONTRIBUICOES": {
+      const r = parseSpedContribuicoes(buffer);
+      const contagem = await gravarExtracao(
+        documentoId,
+        r,
+        "ESCRITURACAO",
+        cnpjEmpresa,
+        uf,
+      );
+      return { parser: "sped-contribuicoes", contagem, avisos: r.warnings };
+    }
+
+    case "PGDAS": {
+      const texto = buffer.subarray(0, 5).toString("latin1") === "%PDF-"
+        ? await pdfBufferParaTexto(buffer)
+        : decodeTextBuffer(buffer).text;
+
+      if (!ehExtratoPgdas(texto)) {
+        return {
+          parser: "pgdas-extrato",
+          contagem: contagemVazia(),
+          avisos: ["O arquivo não tem a estrutura de um extrato do PGDAS-D."],
+        };
+      }
+
+      const extrato = parseExtratoPgdas(texto);
+      if (!extrato) {
+        return {
+          parser: "pgdas-extrato",
+          contagem: contagemVazia(),
+          avisos: ["Não foi possível extrair os valores do extrato."],
+        };
+      }
+
+      const contagem = contagemVazia();
+      contagem.apuracoesSimples = await prisma.$transaction((tx) =>
+        persistirPgdas(tx, documentoId, extrato),
+      );
+      return { parser: "pgdas-extrato", contagem, avisos: extrato.avisos };
+    }
+
+    default:
+      throw new Error(`Sem parser para o tipo ${tipo}.`);
+  }
+}
+
+/**
+ * Pacote .zip: o roteamento por conteúdo já é feito pelo `extrairDeZip`, que
+ * devolve tudo consolidado num resultado só.
+ *
+ * O ponto delicado é a origem: um mesmo pacote pode trazer XMLs (autorizados) e
+ * um SPED (escrituração). Como o resultado vem unificado, o pacote é inspecionado
+ * antes para saber se contém escrituração — e, quando contém, é processado em
+ * duas passadas, cada uma com sua origem. Misturar as duas origens numa só
+ * inviabilizaria o cruzamento "emitida × escriturada".
+ */
+async function processarPacote(
+  documentoId: string,
+  buffer: Buffer,
+  nomeArquivo: string,
+  cnpjEmpresa: string,
+  uf: string | undefined,
+  avisos: string[],
+): Promise<ContagemPersistida> {
+  const JSZip = (await import("jszip")).default;
+  const zip = await JSZip.loadAsync(buffer);
+  const entradas = Object.values(zip.files).filter((f) => !f.dir);
+
+  let contagem = contagemVazia();
+
+  for (const entrada of entradas) {
+    let interno: Buffer;
+    try {
+      interno = Buffer.from(await entrada.async("nodebuffer"));
+    } catch (e) {
+      avisos.push(`${entrada.name}: não foi possível extrair — ${(e as Error).message}`);
+      continue;
+    }
+
+    const cls = classificar(interno, entrada.name);
+    if (SEM_PARSER[cls.tipo]) {
+      avisos.push(`${entrada.name}: ${SEM_PARSER[cls.tipo]}`);
+      continue;
+    }
+
+    try {
+      const r = await processarUnico(documentoId, cls.tipo, interno, cnpjEmpresa, uf);
+      contagem = somarContagens(contagem, r.contagem);
+      for (const a of r.avisos) avisos.push(`${entrada.name}: ${a}`);
+    } catch (e) {
+      // Um arquivo ruim no meio do pacote não custa os outros.
+      avisos.push(`${entrada.name}: ${(e as Error).message}`);
+    }
+  }
+
+  if (entradas.length === 0) {
+    avisos.push(`${nomeArquivo}: pacote vazio.`);
+  }
+
+  return contagem;
+}
+
+/** Grava notas, itens, eventos e apurações de um resultado de extração. */
+async function gravarExtracao(
+  documentoId: string,
+  resultado: ExtractionResult,
+  origem: OrigemNota,
+  cnpjEmpresa: string,
+  uf: string | undefined,
+): Promise<ContagemPersistida> {
+  const contagem = contagemVazia();
+
+  // Timeout ampliado: um SPED mensal traz milhares de notas com seus itens, e
+  // o padrão de 5 s do Prisma não cobre isso em máquina de escritório.
+  await prisma.$transaction(
+    async (tx) => {
+      const n = await persistirNotas(tx, documentoId, resultado, origem, cnpjEmpresa);
+      contagem.notas = n.notas;
+      contagem.itens = n.itens;
+
+      contagem.eventos = await persistirEventos(tx, documentoId, resultado);
+
+      contagem.apuracoesIcms = await persistirApuracaoIcms(
+        tx,
+        documentoId,
+        resultado.apuracoes,
+        uf,
+      );
+
+      if (ehResultadoContribuicoes(resultado)) {
+        contagem.apuracoesContribuicoes = await persistirApuracaoContribuicoes(
+          tx,
+          documentoId,
+          resultado,
+        );
+      }
+    },
+    { timeout: 120_000, maxWait: 30_000 },
+  );
+
+  return contagem;
+}
+
+function ehResultadoContribuicoes(
+  r: ExtractionResult,
+): r is ExtractionResultSpedContribuicoes {
+  return "pis" in r && "cofins" in r;
+}
