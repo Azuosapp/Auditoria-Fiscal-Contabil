@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { AchadoProduzido, ContextoRegra, Regra } from "../tipos";
-import { mesAno, moeda } from "../texto";
+import { mesAno, moeda, percentual as pct } from "../texto";
 
 /**
  * Família D — regime e enquadramento.
@@ -135,10 +135,30 @@ async function d04PlanejamentoRecomendado(
 ): Promise<AchadoProduzido[]> {
   // Só faz sentido recomendar quando há apuração lida: sem faturamento
   // conhecido, a recomendação seria genérica e valeria para qualquer empresa.
-  const apuracoes = await prisma.apuracaoFiscal.count({
+  const apuracoesLidas = await prisma.apuracaoFiscal.findMany({
     where: { documento: { auditoriaId: ctx.auditoriaId } },
+    select: { competencia: true },
+    orderBy: { competencia: "asc" },
   });
+  const apuracoes = apuracoesLidas.length;
   if (apuracoes === 0) return [];
+
+  // O faturamento que o estudo vai usar como ponto de partida. Não é exemplo de
+  // erro — o D04 não aponta erro nenhum —, é a base concreta da recomendação:
+  // sem ela o achado é conselho genérico, que serve para qualquer empresa.
+  const saidas = await prisma.notaFiscal.aggregate({
+    where: {
+      documento: { auditoriaId: ctx.auditoriaId },
+      direcao: "SAIDA",
+      situacao: "AUTORIZADA",
+      origem: "ESCRITURACAO",
+    },
+    _sum: { valorTotal: true },
+    _count: { _all: true },
+  });
+  const faturamento = saidas._sum.valorTotal ?? new Prisma.Decimal(0);
+  const primeira = apuracoesLidas[0]?.competencia;
+  const ultima = apuracoesLidas[apuracoesLidas.length - 1]?.competencia;
 
   const regimeAtual = [...new Set(ctx.regimePorExercicio.values())];
   const nomeRegime =
@@ -171,12 +191,40 @@ async function d04PlanejamentoRecomendado(
       declarado: true,
       evidencias: [
         {
-          tipo: "CONTEXTO" as const,
-          arquivo: "Apuração fiscal do período",
-          observacao:
-            `${apuracoes} competência(s) com apuração de ICMS lida — base do ` +
-            `faturamento para o estudo.`,
+          tipo: "EXEMPLO" as const,
+          arquivo: "SPED Fiscal do período",
+          registro: "E110",
+          campo: "Competências com apuração de ICMS lida",
+          valor: `${apuracoes}${
+            primeira && ultima
+              ? ` — de ${mesAno(primeira)} a ${mesAno(ultima)}`
+              : ""
+          }`,
+          observacao: "período que o estudo de regime vai cobrir",
         },
+        ...(faturamento.isZero()
+          ? []
+          : [
+              {
+                tipo: "EXEMPLO" as const,
+                arquivo: "SPED Fiscal do período",
+                registro: "C100",
+                campo: "Faturamento escriturado no período",
+                valor: moeda(faturamento),
+                observacao: `${saidas._count._all} nota(s) de saída — ponto de partida da simulação`,
+              },
+            ]),
+        ...(nomeRegime
+          ? [
+              {
+                tipo: "EXEMPLO" as const,
+                arquivo: "Cadastro da empresa",
+                campo: "Regime declarado no período",
+                valor: nomeRegime,
+                observacao: "regime a confrontar com as demais opções no estudo",
+              },
+            ]
+          : []),
       ],
     },
   ];
@@ -222,7 +270,7 @@ async function d02FatorR(ctx: ContextoRegra): Promise<AchadoProduzido[]> {
       severidade: "OPORTUNIDADE",
       confianca: "MEDIA",
       descricao:
-        `Fator R de ${fator.times(100).toFixed(2)}% em ${mesAno(a.competencia)} — ` +
+        `Fator R de ${pct(fator.times(100))} em ${mesAno(a.competencia)} — ` +
         `abaixo dos 28% que levariam a receita de serviço do Anexo V ao Anexo III.`,
       textoCliente:
         `Em ${mesAno(a.competencia)} a empresa ficou a pouco do fator R de 28%. ` +
@@ -241,7 +289,7 @@ async function d02FatorR(ctx: ContextoRegra): Promise<AchadoProduzido[]> {
           tipo: "EXEMPLO" as const,
           arquivo: `PGDAS-D ${mesAno(a.competencia)}`,
           campo: "fator R declarado",
-          valor: `${fator.times(100).toFixed(2)}% (limiar: 28%)`,
+          valor: `${pct(fator.times(100))} (limiar: 28%)`,
         },
         {
           tipo: "CONTEXTO" as const,

@@ -585,7 +585,9 @@ export default async function RelatorioPage({
  */
 function Exemplos({
   evidencias,
+  severidade,
 }: {
+  severidade: string;
   evidencias: {
     id: string;
     tipo: string;
@@ -605,6 +607,15 @@ function Exemplos({
   const contexto = evidencias.filter((e) => e.tipo === "CONTEXTO");
 
   const temDocumento = exemplos.some((e) => e.documentoNumero);
+
+  // Oportunidade não é erro, e o relatório vai para o cliente: chamar de erro
+  // a base de uma recomendação de planejamento seria acusá-lo do que não fez.
+  const oportunidade = severidade === "OPORTUNIDADE";
+  const tituloExemplo = oportunidade
+    ? "Base da recomendação"
+    : temDocumento
+      ? "Exemplo do erro — documento(s) encontrado(s)"
+      : "Exemplo do erro encontrado";
 
   return (
     <>
@@ -632,11 +643,7 @@ function Exemplos({
 
       {exemplos.length > 0 ? (
         <div className="exemplo">
-          <div className="exemplo-titulo">
-            {temDocumento
-              ? `Exemplo do erro — documento(s) encontrado(s)`
-              : "Exemplo do erro encontrado"}
-          </div>
+          <div className="exemplo-titulo">{tituloExemplo}</div>
 
           {temDocumento ? (
             <table>
@@ -824,7 +831,7 @@ function Verificacao({ item }: { item: ItemVerificado }) {
             </div>
           ) : null}
 
-          <Exemplos evidencias={a.evidencias} />
+          <Exemplos evidencias={a.evidencias} severidade={a.severidade} />
         </div>
       ))}
 

@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { AchadoProduzido, ContextoRegra, Regra } from "../tipos";
-import { mesAno, moeda } from "../texto";
+import { mesAno, moeda, percentual as pct } from "../texto";
 
 /**
  * Família B — receita e omissão.
@@ -367,7 +367,10 @@ async function b05ReceitaDivergenteEntreEscrituracoes(
         direcao: "SAIDA",
         situacao: "AUTORIZADA",
       },
-      _sum: { valorTotal: true },
+      // IPI e ICMS-ST vêm somados porque NÃO integram a receita bruta: o valor
+      // total da nota os inclui, a base de PIS/COFINS não. Comparar os dois
+      // sem descontá-los acusa divergência em toda indústria que destaca IPI.
+      _sum: { valorTotal: true, valorIpi: true, valorIcmsSt: true },
     }),
     prisma.apuracaoContribuicoes.findMany({
       where: {
@@ -387,9 +390,19 @@ async function b05ReceitaDivergenteEntreEscrituracoes(
   const achados: AchadoProduzido[] = [];
 
   for (const s of saidasPorMes) {
-    const receitaFiscal = s._sum.valorTotal ?? ZERO;
+    const totalNotas = s._sum.valorTotal ?? ZERO;
+    const ipi = s._sum.valorIpi ?? ZERO;
+    const icmsSt = s._sum.valorIcmsSt ?? ZERO;
     const basePis = base.get(s.competencia);
-    if (!basePis || receitaFiscal.isZero()) continue;
+    if (!basePis || totalNotas.isZero()) continue;
+
+    // O que de fato se compara com a base de PIS/COFINS: o valor da nota menos
+    // os tributos que não são receita. O IPI destacado está fora da receita
+    // bruta por força do art. 12, § 4º, do DL 1.598/1977, e o ICMS-ST porque é
+    // cobrado do adquirente por substituição. Sem esse ajuste o confronto
+    // acusaria divergência em toda indústria — falso positivo garantido.
+    const receitaFiscal = totalNotas.minus(ipi).minus(icmsSt);
+    if (receitaFiscal.lessThanOrEqualTo(0)) continue;
 
     const diferenca = receitaFiscal.minus(basePis).abs();
     const percentual = diferenca.dividedBy(receitaFiscal).times(100);
@@ -403,12 +416,13 @@ async function b05ReceitaDivergenteEntreEscrituracoes(
       competencia: s.competencia,
       confianca: "MEDIA",
       descricao:
-        `Receita de saídas no SPED Fiscal (${moeda(receitaFiscal)}) diverge da ` +
-        `base de PIS na EFD-Contribuições (${moeda(basePis)}) em ` +
-        `${percentual.toFixed(1)}%.`,
+        `Receita de saídas no SPED Fiscal (${moeda(receitaFiscal)}, já sem IPI ` +
+        `e ICMS-ST) diverge da base de PIS na EFD-Contribuições ` +
+        `(${moeda(basePis)}) em ${pct(percentual)}.`,
       textoCliente:
         `As duas escriturações entregues ao fisco em ${mesAno(s.competencia)} ` +
-        `apresentam receitas diferentes, com diferença de ${moeda(diferenca)}.`,
+        `apresentam receitas diferentes, com ${moeda(diferenca)} fora da base ` +
+        `de PIS/COFINS sem justificativa visível nos arquivos entregues.`,
       recomendacao:
         "Conciliar a base de PIS/COFINS com a receita escriturada e documentar " +
         "as exclusões de base aplicadas.",
@@ -423,7 +437,7 @@ async function b05ReceitaDivergenteEntreEscrituracoes(
           tipo: "CONFRONTO" as const,
           arquivo: `SPED Fiscal ${mesAno(s.competencia)}`,
           registro: "C100",
-          campo: "soma das saídas escrituradas",
+          campo: "receita de saídas, já sem IPI e ICMS-ST",
           valor: moeda(receitaFiscal),
         },
         {
@@ -436,8 +450,69 @@ async function b05ReceitaDivergenteEntreEscrituracoes(
         {
           tipo: "CONFRONTO" as const,
           arquivo: "Diferença apurada",
-          campo: "SPED Fiscal menos base de PIS",
-          valor: `${moeda(diferenca)} (${percentual.toFixed(1)}%)`,
+          campo: "receita de saídas menos base de PIS",
+          valor: `${moeda(diferenca)} (${pct(percentual)})`,
+        },
+        // O caminho da conta, linha a linha. É o que o contador do cliente
+        // refaz na frente da gente: sai do total das notas, desce até a base
+        // declarada e mostra onde a conta para de fechar.
+        {
+          tipo: "EXEMPLO" as const,
+          arquivo: `SPED Fiscal ${mesAno(s.competencia)}`,
+          registro: "C100",
+          campo: "Valor total das notas de saída escrituradas",
+          valor: moeda(totalNotas),
+          observacao: "soma do campo VL_DOC dos registros C100 de saída",
+        },
+        ...(ipi.isZero()
+          ? []
+          : [
+              {
+                tipo: "EXEMPLO" as const,
+                arquivo: `SPED Fiscal ${mesAno(s.competencia)}`,
+                registro: "C100",
+                campo: "(−) IPI destacado nas mesmas notas",
+                valor: moeda(ipi),
+                observacao:
+                  "o IPI não integra a receita bruta (DL 1.598/1977, art. 12, § 4º)",
+              },
+            ]),
+        ...(icmsSt.isZero()
+          ? []
+          : [
+              {
+                tipo: "EXEMPLO" as const,
+                arquivo: `SPED Fiscal ${mesAno(s.competencia)}`,
+                registro: "C100",
+                campo: "(−) ICMS-ST destacado nas mesmas notas",
+                valor: moeda(icmsSt),
+                observacao: "cobrado do adquirente por substituição, não é receita",
+              },
+            ]),
+        {
+          tipo: "EXEMPLO" as const,
+          arquivo: "Cálculo",
+          campo: "(=) Receita que deveria compor a base",
+          valor: moeda(receitaFiscal),
+          observacao: "é este número que se compara com a base declarada",
+        },
+        {
+          tipo: "EXEMPLO" as const,
+          arquivo: `EFD-Contribuições ${mesAno(s.competencia)}`,
+          registro: "M210",
+          campo: "(−) Base de PIS efetivamente declarada",
+          valor: moeda(basePis),
+          observacao: "campo VL_BC_CONT da apuração entregue",
+        },
+        {
+          tipo: "EXEMPLO" as const,
+          arquivo: "Cálculo",
+          campo: "(=) Receita fora da base, sem justificativa nos arquivos",
+          valor: `${moeda(diferenca)} (${pct(percentual)})`,
+          observacao:
+            "conferir se corresponde a venda monofásica, com alíquota zero, " +
+            "isenta, suspensa ou de exportação — cada uma dessas exclusões tem " +
+            "de estar demonstrada na própria escrituração",
         },
       ],
     });

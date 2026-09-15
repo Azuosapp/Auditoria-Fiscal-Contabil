@@ -41,7 +41,13 @@ type AchadoComEvidencias = Achado & { evidencias: Evidencia[] };
  * conversa. Fica aberto por padrão, não escondido atrás de "ver evidência":
  * é a parte mais útil do achado.
  */
-function ExemploDoErro({ evidencias }: { evidencias: Evidencia[] }) {
+function ExemploDoErro({
+  evidencias,
+  severidade,
+}: {
+  evidencias: Evidencia[];
+  severidade: string;
+}) {
   const exemplos = evidencias.filter((e) => e.tipo === "EXEMPLO");
   const confrontos = evidencias.filter((e) => e.tipo === "CONFRONTO");
   const contexto = evidencias.filter((e) => e.tipo === "CONTEXTO");
@@ -49,6 +55,14 @@ function ExemploDoErro({ evidencias }: { evidencias: Evidencia[] }) {
   if (evidencias.length === 0) return null;
 
   const temDocumento = exemplos.some((e) => e.documentoNumero);
+
+  // Oportunidade não é erro: chamar de "exemplo do erro" a base de uma
+  // recomendação de planejamento faria o relatório acusar o cliente de algo
+  // que ele não fez.
+  const rotulo =
+    severidade === "OPORTUNIDADE"
+      ? "Base da recomendação"
+      : "Exemplo do erro encontrado";
 
   return (
     <div className="mt-2 space-y-2">
@@ -81,7 +95,7 @@ function ExemploDoErro({ evidencias }: { evidencias: Evidencia[] }) {
       {exemplos.length > 0 ? (
         <div className="overflow-hidden rounded-md border border-surface-border">
           <div className="border-b border-surface-border bg-[#f8fafc] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.4px] text-content-muted">
-            Exemplo do erro encontrado
+            {rotulo}
           </div>
 
           <div className="max-h-64 overflow-y-auto">
@@ -238,7 +252,10 @@ export function ListaAchados({
                 </p>
               ) : null}
 
-              <ExemploDoErro evidencias={a.evidencias} />
+              <ExemploDoErro
+                evidencias={a.evidencias}
+                severidade={a.severidade}
+              />
 
               <div className="mt-2 flex flex-wrap gap-3 text-[9px] text-content-muted">
                 <span>{a.baseLegal.join(" · ")}</span>
@@ -285,47 +302,64 @@ export function ListaAchados({
         </section>
       ) : null}
 
-      <section className="mt-4">
-        <h2 className="mb-1 text-[11px] font-bold uppercase tracking-[0.5px] text-content-muted">
-          O que não foi analisado, e por quê
-        </h2>
-        <p className="mb-2 text-[10px] text-content-muted">
-          Os itens abaixo não puderam ser avaliados com os documentos entregues.
-          Não significa que estejam corretos.
-        </p>
+      {/*
+        A lista do que não pôde ser avaliado fica recolhida.
 
+        A página é a dos erros encontrados: uma tabela de dezenas de linhas
+        dizendo "não avaliei isto" empurrava os achados reais para fora da tela
+        e, pior, parecia uma segunda lista de erros — os itens trazem código e
+        título de achado. Mas a informação não pode sumir: sem ela, quem lê
+        conclui que o que não está apontado está certo. Por isso vira um resumo
+        de uma linha, que abre quando alguém quiser conferir o alcance.
+      */}
+      <section className="mt-4">
         {lacunas.length === 0 ? (
-          <div className="card text-[10px] text-content-muted">
-            Todas as regras desta área puderam ser avaliadas.
+          <div className="text-[10px] text-content-muted">
+            Todas as regras desta área puderam ser avaliadas com os arquivos
+            entregues.
           </div>
         ) : (
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Não avaliado</th>
-                  <th className="w-40">Documento que falta</th>
-                  <th className="w-24">Competência</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lacunas.map((l) => (
-                  <tr key={l.id}>
-                    <td>
-                      <div className="font-medium">{l.escopo}</div>
-                      <div className="mt-0.5 text-[10px] text-content-muted">
-                        {l.descricao}
-                      </div>
-                    </td>
-                    <td className="font-mono text-[10px]">{l.documentoFaltante}</td>
-                    <td className="font-mono text-[10px]">
-                      {l.competencia ? fmtComp(l.competencia) : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <details className="rounded-md border border-surface-border">
+            <summary className="cursor-pointer px-3 py-2 text-[10px] text-content-muted">
+              <strong>{lacunas.length} verificação(ões) sem os arquivos
+              necessários.</strong>{" "}
+              Não são erros — é o que ficou fora do alcance desta auditoria. Não
+              significa que esteja correto. Abrir para ver a lista e o documento
+              que falta em cada uma.
+            </summary>
+
+            <div className="border-t border-surface-border">
+              <div className="tbl-wrap">
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>Não avaliado</th>
+                      <th className="w-40">Documento que falta</th>
+                      <th className="w-24">Competência</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lacunas.map((l) => (
+                      <tr key={l.id}>
+                        <td>
+                          <div className="font-medium">{l.escopo}</div>
+                          <div className="mt-0.5 text-[10px] text-content-muted">
+                            {l.descricao}
+                          </div>
+                        </td>
+                        <td className="font-mono text-[10px]">
+                          {l.documentoFaltante}
+                        </td>
+                        <td className="font-mono text-[10px]">
+                          {l.competencia ? fmtComp(l.competencia) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </details>
         )}
       </section>
     </>
