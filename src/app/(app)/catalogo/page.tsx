@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { RegimeTributario } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
@@ -52,6 +53,12 @@ const ROTULO_REGIME: Record<string, string> = {
   ARBITRADO: "Arbitrado",
 };
 
+/** Enumeração corrida em português: "A, B e C". */
+function enumerar(itens: string[]): string {
+  if (itens.length <= 1) return itens[0] ?? "";
+  return `${itens.slice(0, -1).join(", ")} e ${itens[itens.length - 1]}`;
+}
+
 function agruparPorFamilia(itens: DefinicaoAchado[]) {
   const mapa = new Map<string, DefinicaoAchado[]>();
   for (const item of itens) {
@@ -71,14 +78,22 @@ export default async function CatalogoPage() {
    *
    * Sem empresa cadastrada ainda, mostra tudo: não há contexto para filtrar.
    */
-  const regimesCadastrados = await prisma.regimePorExercicio.findMany({
-    select: { regime: true },
-    distinct: ["regime"],
+  const empresas = await prisma.empresa.findMany({
+    select: { razaoSocial: true, regimes: { select: { regime: true } } },
+    orderBy: { razaoSocial: "asc" },
   });
 
   const regimes = new Set<RegimeTributario>(
-    regimesCadastrados.map((r) => r.regime),
+    empresas.flatMap((e) => e.regimes.map((r) => r.regime)),
   );
+
+  // Quem responde pelo filtro. Sem isso a tela parece o catálogo de uma
+  // empresa só — foi exatamente o que confundiu na primeira leitura.
+  const comRegime = empresas.filter((e) => e.regimes.length > 0);
+  const nomesFiltrantes =
+    comRegime.length <= 3
+      ? enumerar(comRegime.map((e) => e.razaoSocial))
+      : `${comRegime.length} empresas cadastradas`;
 
   const visiveis = CATALOGO.filter((d) => aplicavelAoRegime(d, regimes));
 
@@ -89,10 +104,8 @@ export default async function CatalogoPage() {
   const fiscais = visiveis.filter((d) => d.area === "FISCAL").length;
   const contabeis = visiveis.filter((d) => d.area === "CONTABIL").length;
 
-  const regimeAtual =
-    regimes.size > 0
-      ? [...regimes].map((r) => ROTULO_REGIME[r] ?? r).join(", ")
-      : null;
+  const rotulosRegime = [...regimes].map((r) => ROTULO_REGIME[r] ?? r).sort();
+  const regimeAtual = rotulosRegime.length > 0 ? enumerar(rotulosRegime) : null;
 
   const areasMontadas: AreaCatalogo[] = AREAS.map((area) => {
     const daArea = visiveis.filter((d) => d.area === area.chave);
@@ -124,13 +137,41 @@ export default async function CatalogoPage() {
       <div className="mb-3">
         <h1 className="text-[15px] font-bold">Catálogo de achados</h1>
         <p className="mt-0.5 text-[11px] text-content-muted">
-          Referência do que a auditoria procura — <strong>não é o resultado de
-          nenhuma empresa</strong>. Os exemplos são ilustrativos, com valores
-          fictícios, e servem para reconhecer o erro quando ele aparecer.
-          {regimeAtual
-            ? ` Lista aplicável ao ${regimeAtual}, regime em que as empresas cadastradas estão enquadradas.`
-            : " Cadastre o regime de uma empresa para a lista se ajustar a ele."}
+          Referência do que a auditoria sabe procurar. Os exemplos são
+          ilustrativos, com valores fictícios, e servem para reconhecer o erro
+          quando ele aparecer no relatório de uma empresa.
         </p>
+      </div>
+
+      <div
+        className="mb-3 rounded-md border px-3 py-2 text-[11px]"
+        style={{
+          background: "#eff6ff",
+          borderColor: "#bfdbfe",
+          color: "#1e3a8a",
+        }}
+      >
+        <strong>Esta tela não é de nenhuma empresa.</strong> Nenhum número aqui
+        veio de documento importado. Para ver os achados de uma empresa, abra a
+        auditoria dela em{" "}
+        <Link href="/auditorias" className="underline">
+          Auditorias
+        </Link>{" "}
+        e use as abas Fiscal e Contábil — lá o nome e o CNPJ aparecem no topo da
+        página.
+        {regimeAtual ? (
+          <div className="mt-1">
+            A lista abaixo está limitada{" "}
+            {rotulosRegime.length > 1 ? "aos regimes " : "ao "}
+            <strong>{regimeAtual}</strong>, de {nomesFiltrantes}. Regra que não vale em nenhum desses regimes fica
+            oculta, porque a auditoria nunca vai executá-la.
+          </div>
+        ) : (
+          <div className="mt-1">
+            Cadastre o regime de uma empresa para a lista se ajustar a ele. Sem
+            isso, o catálogo mostra todas as regras, de todos os regimes.
+          </div>
+        )}
       </div>
 
       <div className="kpis">
