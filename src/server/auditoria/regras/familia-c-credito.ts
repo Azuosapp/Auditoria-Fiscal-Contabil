@@ -15,13 +15,41 @@ import { mesAno, moeda } from "../texto";
 const ZERO = new Prisma.Decimal(0);
 
 /**
- * CST de PIS/COFINS na ENTRADA que NÃO geram direito a crédito.
+ * CST que indicam item sem direito a crédito numa entrada.
  *
- * 04 monofásico, 05 substituição tributária, 06 alíquota zero, 07 isenta,
- * 08 sem incidência, 09 suspensão. Comprar item assim e tomar crédito é glosa
- * certa em fiscalização.
+ * São DUAS tabelas diferentes, e confundi-las inverte o resultado:
+ *
+ * - **04 a 09** é a tabela de SAÍDA (tabela 4.3.3/4.3.4). Num XML de entrada,
+ *   é o CST que o FORNECEDOR aplicou na saída dele: 04 monofásico, 05
+ *   substituição tributária, 06 alíquota zero, 07 isento, 08 sem incidência,
+ *   09 suspensão. Comprar item assim e tomar crédito é glosa certa — este é o
+ *   erro que a regra procura.
+ *
+ * - **70 a 75** é a tabela de AQUISIÇÃO, usada no C170 do SPED Fiscal e na
+ *   EFD-Contribuições: 70 aquisição sem direito a crédito, 71 com isenção,
+ *   72 com suspensão, 73 a alíquota zero, 74 sem incidência, 75 por
+ *   substituição. Aqui a própria empresa JÁ classificou a entrada como sem
+ *   crédito — é escrituração correta, não achado. Se ela errar, o erro está em
+ *   ter usado 50 (com direito) onde cabia 70; isso só se prova indo ao NCM do
+ *   item, fora do alcance desta regra.
+ *
+ * Por isso o gatilho é a primeira tabela. Ver docs/CATALOGO_ACHADOS.md.
  */
 const CST_SEM_CREDITO = new Set(["04", "05", "06", "07", "08", "09"]);
+
+/** O que cada CST significa, para o relatório não exigir a tabela ao lado. */
+const NOME_CST: Record<string, string> = {
+  "04": "tributação monofásica",
+  "05": "substituição tributária",
+  "06": "alíquota zero",
+  "07": "operação isenta",
+  "08": "operação sem incidência",
+  "09": "operação com suspensão",
+};
+
+function rotuloCst(cst: string | null | undefined): string {
+  return NOME_CST[cst ?? ""] ?? "sem direito a crédito";
+}
 
 export const familiaC: Regra = {
   codigos: ["C01"],
@@ -88,8 +116,21 @@ async function c01CreditoSobreItemSemDireito(
       cstCofins: true,
       valorItem: true,
       descricao: true,
-      nota: { select: { numero: true, competencia: true } },
+      // O NCM identifica o produto melhor que a descrição, que varia de
+      // fornecedor para fornecedor. É por ele que se confere se o item é
+      // mesmo monofásico na lista da IN RFB nº 2.121/2022.
+      ncm: true,
+      quantidade: true,
+      nota: {
+        select: {
+          numero: true,
+          competencia: true,
+          dataEmissao: true,
+          cnpjEmitente: true,
+        },
+      },
     },
+    orderBy: { valorItem: "desc" },
   });
 
   const porCompetencia = new Map<
@@ -140,13 +181,24 @@ async function c01CreditoSobreItemSemDireito(
           "EFD-Contribuições antes de tratar como crédito indevido — o valor " +
           "apontado é o das compras, não o do crédito glosável.",
         evidencias: [
+          // Produto e NCM vêm na frente: é o que permite conferir, na lista
+          // da IN RFB nº 2.121/2022, se o item é mesmo monofásico — e é a
+          // primeira pergunta que o contador do cliente faz.
           ...d.exemplos.map((item) => ({
             tipo: "EXEMPLO" as const,
-            arquivo: `Documento de entrada · ${mesAno(competencia)}`,
-            documentoNumero: item.nota.numero,
-            campo: `CST PIS ${item.cstPis ?? "—"} / COFINS ${item.cstCofins ?? "—"}`,
+            arquivo: `Entrada · ${mesAno(competencia)}`,
+            documentoNumero: `NF ${item.nota.numero}`,
+            dataDocumento: item.nota.dataEmissao.toLocaleDateString("pt-BR", {
+              timeZone: "UTC",
+            }),
+            participante: item.nota.cnpjEmitente,
+            campo: `${item.descricao ?? "produto sem descrição"} · NCM ${
+              item.ncm ?? "não informado"
+            }`,
             valor: moeda(item.valorItem),
-            observacao: item.descricao ?? "item sem descrição no XML",
+            observacao:
+              `CST PIS ${item.cstPis ?? "—"} / COFINS ${item.cstCofins ?? "—"}` +
+              ` — ${rotuloCst(item.cstPis ?? item.cstCofins)}`,
           })),
           {
             tipo: "CONFRONTO" as const,

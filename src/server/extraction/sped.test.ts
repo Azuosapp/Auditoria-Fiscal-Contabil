@@ -245,3 +245,51 @@ describe("access-key — dígito verificador (módulo 11)", () => {
     expect(isValidAccessKey(undefined)).toBe(false);
   });
 });
+
+/**
+ * Regressão de 15/09/2026: o C170 era lido sem os CST de PIS e COFINS.
+ *
+ * O parser pegava os VALORES (campos 30 e 36) mas não os CST (campos 25 e 31).
+ * Sem eles, não há como saber se a entrada dá direito a crédito — CST 04
+ * (monofásico), 05 (ST), 06 (alíquota zero), 07, 08 e 09 não geram crédito
+ * algum. A regra de crédito indevido nunca disparava sobre dados de SPED, e o
+ * falso negativo só apareceu quando alguém pediu um exemplo que o sistema
+ * deveria ter encontrado.
+ *
+ * Linha conferida campo a campo contra um SPED real.
+ */
+describe("C170 — CST de PIS e COFINS", () => {
+  const SPED =
+    "|0000|015|0|01012026|31012026|INDUSTRIA X|12345678000199||GO|1234|5208707|||A|0|\n" +
+    "|0200|575|CT 03 150X1945|||UN|00|73181500||||\n" +
+    "|C100|0|1|F1|55|00|1|1001|52260112345678000199550010000010011|05012026|05012026|809,16|\n" +
+    "|C170|1|575|CT 03 150X1945 IDEAL|613|UN|809,16|0|0|020|1101|1102|425,87|19|80,92|0|0|0|1|00||809,16|15|121,37|50|728,24|1,65|0|0|12,02|50|728,24|7,6|0|0|55,35|100000|0|\n" +
+    "|C170|2|576|PRODUTO MONOFASICO|10|UN|500,00|0|0|040|1101|1102|0|0|0|0|0|0|1|53||0|0|0|04|0|0|0|0|0|06|0|0|0|0|0|100000|0|\n";
+
+  const resultado = parseSpedEfd(Buffer.from(SPED, "latin1"));
+  const itens = resultado.invoices[0]?.items ?? [];
+
+  it("lê o CST de PIS do campo 25 e o de COFINS do campo 31", () => {
+    expect(itens[0]?.cstPis).toBe("50");
+    expect(itens[0]?.cstCofins).toBe("50");
+  });
+
+  it("distingue o item que não gera crédito", () => {
+    // CST 04 (monofásico) no PIS e 06 (alíquota zero) na COFINS.
+    expect(itens[1]?.cstPis).toBe("04");
+    expect(itens[1]?.cstCofins).toBe("06");
+  });
+
+  it("não confunde o CST com o valor do tributo", () => {
+    // O erro anterior era ler só os valores; os dois têm de vir corretos e
+    // separados, senão a regra de crédito compara a coisa errada.
+    expect(itens[0]?.pisValue?.toFixed(2)).toBe("12.02");
+    expect(itens[0]?.cofinsValue?.toFixed(2)).toBe("55.35");
+  });
+
+  it("traz o NCM do cadastro do produto (registro 0200)", () => {
+    // O NCM não está no C170: vem do 0200, pelo código do item. É o que
+    // permite dizer QUAL produto no relatório.
+    expect(itens[0]?.ncm).toBe("73181500");
+  });
+});

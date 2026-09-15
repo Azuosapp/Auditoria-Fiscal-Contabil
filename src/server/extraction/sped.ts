@@ -325,7 +325,22 @@ export function parseSpedEfd(
             icmsValue: dec(f(15)),
             icmsStValue: dec(f(18)),
             ipiValue: dec(f(24)),
+            /**
+             * CST de PIS (campo 25) e de COFINS (campo 31) do C170.
+             *
+             * Sem eles não há como saber se a entrada dá direito a crédito: CST
+             * 04 (monofásico), 05 (ST), 06 (alíquota zero), 07 (isento), 08 (sem
+             * incidência) e 09 (suspensão) não geram crédito algum. Enquanto
+             * esses campos ficavam de fora, a regra de crédito indevido nunca
+             * disparava sobre dados de SPED — falso negativo silencioso, que só
+             * apareceu quando um cliente real perguntou por um exemplo que o
+             * sistema deveria ter encontrado.
+             *
+             * Posições conferidas campo a campo num SPED real (jan/2026).
+             */
+            cstPis: f(25),
             pisValue: dec(f(30)),
+            cstCofins: f(31),
             cofinsValue: dec(f(36)),
             ufOrigin: currentInvoice.emitUf,
             ufDestination: currentInvoice.destUf,

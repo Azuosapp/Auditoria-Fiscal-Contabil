@@ -375,7 +375,10 @@ const FAMILIA_C: DefinicaoAchado[] = [
     tributo: "PIS_COFINS",
     fontesNecessarias: ["SPED_CONTRIBUICOES", "NFE_XML"],
     descricao:
-      "Crédito tomado sobre entrada com CST de tributação monofásica, em que não há débito na revenda nem direito a crédito.",
+      "Entrada cujo fornecedor aplicou CST de 04 a 09 (monofásico, substituição, " +
+      "alíquota zero, isento, sem incidência ou suspensão), em competência com " +
+      "crédito de PIS/COFINS apropriado. Não confundir com os CST 70 a 75 do " +
+      "C170, que são a classificação correta de aquisição sem crédito.",
     exemplo:
       "Em 05/2026 a empresa apropriou R$ 31.000,00 de crédito de PIS/COFINS " +
       "e, na mesma competência, comprou R$ 48.200,00 em itens com CST 04 " +
