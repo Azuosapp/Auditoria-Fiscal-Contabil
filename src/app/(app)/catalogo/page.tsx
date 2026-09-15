@@ -6,7 +6,6 @@ import {
   type AreaAchado,
   type DefinicaoAchado,
 } from "@/server/auditoria/catalogo";
-import { FiltroRegimeCatalogo } from "@/components/FiltroRegimeCatalogo";
 
 export const metadata = { title: "Catálogo de achados · Auditoria Azuos" };
 export const dynamic = "force-dynamic";
@@ -46,14 +45,6 @@ const CLASSE_SEVERIDADE: Record<string, string> = {
   OPORTUNIDADE: "sev sev-oportunidade",
 };
 
-const REGIMES_VALIDOS: RegimeTributario[] = [
-  "SIMPLES_NACIONAL",
-  "LUCRO_PRESUMIDO",
-  "LUCRO_REAL",
-  "MEI",
-  "IMUNE_ISENTA",
-  "ARBITRADO",
-];
 
 const ROTULO_REGIME: Record<string, string> = {
   SIMPLES_NACIONAL: "Simples Nacional",
@@ -74,46 +65,25 @@ function agruparPorFamilia(itens: DefinicaoAchado[]) {
   return mapa;
 }
 
-export default async function CatalogoPage({
-  searchParams,
-}: {
-  searchParams: { regime?: string };
-}) {
+export default async function CatalogoPage() {
   /**
-   * O catálogo é filtrado pelo regime, e não apenas anotado com ele.
+   * O catálogo mostra apenas o que existe no regime em que as empresas estão
+   * enquadradas. Não há como escolher outro regime: regra de regime alheio não
+   * é informação útil aqui — passa a impressão de que o sistema vai procurar
+   * aquilo, e polui a referência com o que nunca vai rodar.
    *
-   * Mostrar "sublimite do Simples ultrapassado" para quem audita uma indústria
-   * do Lucro Real não é só ruído: passa a impressão de que o sistema vai
-   * procurar aquilo. A regra que não existe para o regime não aparece.
-   *
-   * O padrão vem das empresas já cadastradas — quem só atende Lucro Real não
-   * deveria precisar escolher nada para deixar de ver regra do Simples.
+   * Sem empresa cadastrada ainda, mostra tudo: não há contexto para filtrar.
    */
   const regimesCadastrados = await prisma.regimePorExercicio.findMany({
     select: { regime: true },
     distinct: ["regime"],
   });
 
-  const doUsuario = new Set(regimesCadastrados.map((r) => r.regime));
+  const regimes = new Set<RegimeTributario>(
+    regimesCadastrados.map((r) => r.regime),
+  );
 
-  const escolhido = REGIMES_VALIDOS.includes(
-    searchParams.regime as RegimeTributario,
-  )
-    ? (searchParams.regime as RegimeTributario)
-    : undefined;
-
-  const mostrarTodos = searchParams.regime === "todos";
-
-  // Sem escolha explícita, vale o que as empresas cadastradas são. Sem empresa
-  // cadastrada ainda, mostra tudo — não há contexto para filtrar.
-  const filtro: Set<RegimeTributario> = mostrarTodos
-    ? new Set()
-    : escolhido
-      ? new Set([escolhido])
-      : doUsuario;
-
-  const visiveis = CATALOGO.filter((d) => aplicavelAoRegime(d, filtro));
-  const ocultos = CATALOGO.length - visiveis.length;
+  const visiveis = CATALOGO.filter((d) => aplicavelAoRegime(d, regimes));
 
   const criticos = visiveis.filter((d) => d.severidade === "CRITICO").length;
   const oportunidades = visiveis.filter(
@@ -122,13 +92,10 @@ export default async function CatalogoPage({
   const fiscais = visiveis.filter((d) => d.area === "FISCAL").length;
   const contabeis = visiveis.filter((d) => d.area === "CONTABIL").length;
 
-  const rotuloFiltro = mostrarTodos
-    ? "todos os regimes"
-    : escolhido
-      ? ROTULO_REGIME[escolhido]
-      : doUsuario.size > 0
-        ? [...doUsuario].map((r) => ROTULO_REGIME[r] ?? r).join(", ")
-        : "todos os regimes";
+  const regimeAtual =
+    regimes.size > 0
+      ? [...regimes].map((r) => ROTULO_REGIME[r] ?? r).join(", ")
+      : null;
 
   return (
     <>
@@ -136,25 +103,17 @@ export default async function CatalogoPage({
         <h1 className="text-[15px] font-bold">Catálogo de achados</h1>
         <p className="mt-0.5 text-[11px] text-content-muted">
           Referência do que a auditoria procura — <strong>não é o resultado de
-          nenhuma empresa</strong>. A lista está filtrada pelo regime: o que não
-          existe no regime não aparece.
+          nenhuma empresa</strong>.
+          {regimeAtual
+            ? ` Lista aplicável ao ${regimeAtual}, regime em que as empresas cadastradas estão enquadradas.`
+            : " Cadastre o regime de uma empresa para a lista se ajustar a ele."}
         </p>
       </div>
-
-      <FiltroRegimeCatalogo
-        selecionado={mostrarTodos ? "todos" : escolhido}
-        regimesCadastrados={[...doUsuario]}
-        rotuloAtual={rotuloFiltro}
-        ocultos={ocultos}
-      />
 
       <div className="kpis">
         <div className="kpi">
           <div className="kpi-label">Achados aplicáveis</div>
           <div className="kpi-val">{visiveis.length}</div>
-          {ocultos > 0 ? (
-            <div className="kpi-sub">{ocultos} fora deste regime</div>
-          ) : null}
         </div>
         <div className="kpi">
           <div className="kpi-label">Fiscais</div>
