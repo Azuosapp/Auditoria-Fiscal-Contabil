@@ -15,3 +15,6 @@ prisma/*.db
 
 # Artefato incremental do tsc — muda a cada build.
 *.tsbuildinfo
+
+# Scripts descartáveis de manutenção.
+tmp-*
