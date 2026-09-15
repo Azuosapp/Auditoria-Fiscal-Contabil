@@ -1,10 +1,15 @@
+import type { RegimeTributario } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import {
   CATALOGO,
+  aplicavelAoRegime,
   type AreaAchado,
   type DefinicaoAchado,
 } from "@/server/auditoria/catalogo";
+import { FiltroRegimeCatalogo } from "@/components/FiltroRegimeCatalogo";
 
 export const metadata = { title: "Catálogo de achados · Auditoria Azuos" };
+export const dynamic = "force-dynamic";
 
 const NOME_FAMILIA: Record<string, string> = {
   DIVERGENCIA_PAGAMENTO: "A · Apurado × Confessado × Pago",
@@ -16,11 +21,7 @@ const NOME_FAMILIA: Record<string, string> = {
   ACESSORIA: "G · Obrigações acessórias",
 };
 
-const AREAS: {
-  chave: AreaAchado;
-  titulo: string;
-  descricao: string;
-}[] = [
+const AREAS: { chave: AreaAchado; titulo: string; descricao: string }[] = [
   {
     chave: "FISCAL",
     titulo: "Análise fiscal e tributária",
@@ -45,12 +46,21 @@ const CLASSE_SEVERIDADE: Record<string, string> = {
   OPORTUNIDADE: "sev sev-oportunidade",
 };
 
+const REGIMES_VALIDOS: RegimeTributario[] = [
+  "SIMPLES_NACIONAL",
+  "LUCRO_PRESUMIDO",
+  "LUCRO_REAL",
+  "MEI",
+  "IMUNE_ISENTA",
+  "ARBITRADO",
+];
+
 const ROTULO_REGIME: Record<string, string> = {
-  SIMPLES_NACIONAL: "Simples",
-  LUCRO_PRESUMIDO: "Presumido",
-  LUCRO_REAL: "Real",
+  SIMPLES_NACIONAL: "Simples Nacional",
+  LUCRO_PRESUMIDO: "Lucro Presumido",
+  LUCRO_REAL: "Lucro Real",
   MEI: "MEI",
-  IMUNE_ISENTA: "Imune/Isenta",
+  IMUNE_ISENTA: "Imune / Isenta",
   ARBITRADO: "Arbitrado",
 };
 
@@ -64,30 +74,87 @@ function agruparPorFamilia(itens: DefinicaoAchado[]) {
   return mapa;
 }
 
-export default function CatalogoPage() {
-  const criticos = CATALOGO.filter((d) => d.severidade === "CRITICO").length;
-  const oportunidades = CATALOGO.filter(
+export default async function CatalogoPage({
+  searchParams,
+}: {
+  searchParams: { regime?: string };
+}) {
+  /**
+   * O catálogo é filtrado pelo regime, e não apenas anotado com ele.
+   *
+   * Mostrar "sublimite do Simples ultrapassado" para quem audita uma indústria
+   * do Lucro Real não é só ruído: passa a impressão de que o sistema vai
+   * procurar aquilo. A regra que não existe para o regime não aparece.
+   *
+   * O padrão vem das empresas já cadastradas — quem só atende Lucro Real não
+   * deveria precisar escolher nada para deixar de ver regra do Simples.
+   */
+  const regimesCadastrados = await prisma.regimePorExercicio.findMany({
+    select: { regime: true },
+    distinct: ["regime"],
+  });
+
+  const doUsuario = new Set(regimesCadastrados.map((r) => r.regime));
+
+  const escolhido = REGIMES_VALIDOS.includes(
+    searchParams.regime as RegimeTributario,
+  )
+    ? (searchParams.regime as RegimeTributario)
+    : undefined;
+
+  const mostrarTodos = searchParams.regime === "todos";
+
+  // Sem escolha explícita, vale o que as empresas cadastradas são. Sem empresa
+  // cadastrada ainda, mostra tudo — não há contexto para filtrar.
+  const filtro: Set<RegimeTributario> = mostrarTodos
+    ? new Set()
+    : escolhido
+      ? new Set([escolhido])
+      : doUsuario;
+
+  const visiveis = CATALOGO.filter((d) => aplicavelAoRegime(d, filtro));
+  const ocultos = CATALOGO.length - visiveis.length;
+
+  const criticos = visiveis.filter((d) => d.severidade === "CRITICO").length;
+  const oportunidades = visiveis.filter(
     (d) => d.severidade === "OPORTUNIDADE",
   ).length;
-  const fiscais = CATALOGO.filter((d) => d.area === "FISCAL").length;
-  const contabeis = CATALOGO.filter((d) => d.area === "CONTABIL").length;
+  const fiscais = visiveis.filter((d) => d.area === "FISCAL").length;
+  const contabeis = visiveis.filter((d) => d.area === "CONTABIL").length;
+
+  const rotuloFiltro = mostrarTodos
+    ? "todos os regimes"
+    : escolhido
+      ? ROTULO_REGIME[escolhido]
+      : doUsuario.size > 0
+        ? [...doUsuario].map((r) => ROTULO_REGIME[r] ?? r).join(", ")
+        : "todos os regimes";
 
   return (
     <>
-      <div className="mb-4">
+      <div className="mb-3">
         <h1 className="text-[15px] font-bold">Catálogo de achados</h1>
         <p className="mt-0.5 text-[11px] text-content-muted">
-          Referência geral do que a auditoria procura — <strong>não é o
-          resultado de nenhuma empresa</strong>. Numa auditoria concreta, só
-          aparecem os achados aplicáveis ao regime dela, e cada um cai na aba
-          Fiscal ou Contábil conforme a divisão abaixo.
+          Referência do que a auditoria procura — <strong>não é o resultado de
+          nenhuma empresa</strong>. A lista está filtrada pelo regime: o que não
+          existe no regime não aparece.
         </p>
       </div>
 
+      <FiltroRegimeCatalogo
+        selecionado={mostrarTodos ? "todos" : escolhido}
+        regimesCadastrados={[...doUsuario]}
+        rotuloAtual={rotuloFiltro}
+        ocultos={ocultos}
+      />
+
       <div className="kpis">
         <div className="kpi">
-          <div className="kpi-label">Achados catalogados</div>
-          <div className="kpi-val">{CATALOGO.length}</div>
+          <div className="kpi-label">Achados aplicáveis</div>
+          <div className="kpi-val">{visiveis.length}</div>
+          {ocultos > 0 ? (
+            <div className="kpi-sub">{ocultos} fora deste regime</div>
+          ) : null}
         </div>
         <div className="kpi">
           <div className="kpi-label">Fiscais</div>
@@ -111,7 +178,8 @@ export default function CatalogoPage() {
       </div>
 
       {AREAS.map((area) => {
-        const daArea = CATALOGO.filter((d) => d.area === area.chave);
+        const daArea = visiveis.filter((d) => d.area === area.chave);
+        if (daArea.length === 0) return null;
         const porFamilia = agruparPorFamilia(daArea);
 
         return (
@@ -138,7 +206,6 @@ export default function CatalogoPage() {
                         <th>Achado</th>
                         <th className="w-28">Severidade</th>
                         <th className="w-24">Tributo</th>
-                        <th className="w-32">Só nos regimes</th>
                         <th>Documentos necessários</th>
                       </tr>
                     </thead>
@@ -161,13 +228,6 @@ export default function CatalogoPage() {
                             </span>
                           </td>
                           <td className="text-[10px]">{d.tributo ?? "—"}</td>
-                          <td className="text-[10px] text-content-muted">
-                            {d.regimesAplicaveis
-                              ? d.regimesAplicaveis
-                                  .map((r) => ROTULO_REGIME[r] ?? r)
-                                  .join(", ")
-                              : "todos"}
-                          </td>
                           <td className="text-[10px] text-content-muted">
                             {d.fontesNecessarias.join(", ")}
                           </td>
