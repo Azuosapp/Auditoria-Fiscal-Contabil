@@ -18,7 +18,7 @@ const ZERO = new Prisma.Decimal(0);
 const TOLERANCIA = new Prisma.Decimal("0.02");
 
 export const familiaB: Regra = {
-  codigos: ["B01", "B02", "B03", "B05", "B07", "B10"],
+  codigos: ["B01", "B02", "B03", "B05", "B07", "B10", "B11"],
 
   async executar(ctx: ContextoRegra): Promise<AchadoProduzido[]> {
     const achados: AchadoProduzido[] = [];
@@ -29,6 +29,7 @@ export const familiaB: Regra = {
     achados.push(...(await b05ReceitaDivergenteEntreEscrituracoes(ctx)));
     achados.push(...(await b07ReceitaPgdasMenorQueReal(ctx)));
     achados.push(...(await b10EscrituradaSemXml(ctx)));
+    achados.push(...(await b11NotaDeTerceiroComoSaida(ctx)));
 
     return achados;
   },
@@ -646,6 +647,100 @@ async function b10EscrituradaSemXml(
       observacao: "escriturada no SPED, sem documento eletrônico entre os arquivos",
     })),
   }));
+}
+
+/**
+ * B11 — nota de terceiro escriturada como saída da empresa.
+ *
+ * O C100 traz IND_OPER (entrada ou saída) declarado pelo próprio contribuinte, e
+ * a chave de acesso carrega o CNPJ de quem emitiu. Quando os dois discordam —
+ * "saída" numa nota que outro emitiu —, a compra entrou na escrituração como
+ * venda: infla a receita, infla o débito de ICMS e distorce toda comparação
+ * com os XMLs.
+ *
+ * Encontrado em arquivo real: duas compras de GLP escrituradas com IND_OPER 1
+ * e CFOP 5660, o CFOP de venda do FORNECEDOR, somando R$ 9.200,49 de receita
+ * que não existiu.
+ *
+ * Sai com confiança MÉDIA porque há caso legítimo — autofaturamento e operação
+ * triangular produzem nota de saída emitida por terceiro. São raros, e o texto
+ * pede a conferência em vez de afirmar o erro.
+ */
+async function b11NotaDeTerceiroComoSaida(
+  ctx: ContextoRegra,
+): Promise<AchadoProduzido[]> {
+  if (!ctx.fontesDisponiveis.has("SPED_FISCAL")) return [];
+
+  const suspeitas = await prisma.notaFiscal.findMany({
+    where: {
+      documento: { auditoriaId: ctx.auditoriaId },
+      origem: "ESCRITURACAO",
+      direcao: "SAIDA",
+      situacao: "AUTORIZADA",
+      // O CNPJ do emitente vem da chave de acesso: se não é a empresa, a nota
+      // não pode ser saída dela.
+      cnpjEmitente: { not: ctx.empresaCnpj },
+    },
+    select: {
+      numero: true,
+      chave: true,
+      competencia: true,
+      dataEmissao: true,
+      valorTotal: true,
+      cnpjEmitente: true,
+    },
+    orderBy: [{ competencia: "asc" }, { valorTotal: "desc" }],
+  });
+
+  if (suspeitas.length === 0) return [];
+
+  const porCompetencia = new Map<string, typeof suspeitas>();
+  for (const n of suspeitas) {
+    const lista = porCompetencia.get(n.competencia) ?? [];
+    lista.push(n);
+    porCompetencia.set(n.competencia, lista);
+  }
+
+  return [...porCompetencia.entries()].map(([competencia, notas]) => {
+    const soma = notas.reduce((s, n) => s.plus(n.valorTotal), ZERO);
+
+    return {
+      codigo: "B11",
+      competencia,
+      confianca: "MEDIA" as const,
+      descricao:
+        `${notas.length} nota(s) com IND_OPER 1 (saída) no registro C100 cuja ` +
+        `chave de acesso aponta outro emitente, somando ${moeda(soma)}.`,
+      textoCliente:
+        `Em ${mesAno(competencia)} há ${notas.length} nota(s) emitida(s) por ` +
+        `terceiros escriturada(s) como saída da empresa, somando ${moeda(soma)}. ` +
+        `A receita e o débito de ICMS do período estão inflados nesse valor.`,
+      recomendacao:
+        "Conferir o IND_OPER e o CFOP dessas notas no SPED. Sendo compras, " +
+        "retificar a escrituração para entrada, com o CFOP correspondente, e " +
+        "refazer a apuração do ICMS da competência.",
+      valorExposicao: soma,
+      declarado: true,
+      ressalva:
+        "Existe nota de saída legitimamente emitida por terceiro — " +
+        "autofaturamento e operação triangular. Conferir caso a caso antes de " +
+        "retificar.",
+      evidencias: notas.slice(0, 10).map((n) => ({
+        tipo: "EXEMPLO" as const,
+        arquivo: `SPED Fiscal ${mesAno(competencia)}`,
+        registro: "C100",
+        campo: "IND_OPER = 1 (saída)",
+        documentoNumero: n.numero,
+        chave: n.chave ?? undefined,
+        dataDocumento: n.dataEmissao.toLocaleDateString("pt-BR", {
+          timeZone: "UTC",
+        }),
+        participante: n.cnpjEmitente,
+        valor: moeda(n.valorTotal),
+        observacao: `emitida pelo CNPJ ${n.cnpjEmitente}, não pela empresa`,
+      })),
+    };
+  });
 }
 
 /** Competências em que há SPED Fiscal efetivamente importado e lido. */

@@ -118,14 +118,30 @@ function codigoModelo(modelo: string | undefined): string {
  * Mas ser a emitente NÃO basta para ser saída, e isso apareceu em arquivo real:
  * na devolução de venda por cliente não contribuinte, é a própria empresa quem
  * emite a nota — de ENTRADA, com CFOP 1201/2201. Contada como saída, a devolução
- * viraria receita e infla o faturamento duas vezes (a venda original e a volta
- * dela). O CFOP é quem diz a natureza da operação, então ele vem primeiro:
- * primeiro dígito 1, 2 ou 3 é entrada; 5, 6 ou 7 é saída.
+ * viraria receita e inflaria o faturamento duas vezes (a venda original e a
+ * volta dela). Por isso o CFOP entra na decisão.
+ *
+ * A ordem entre os dois critérios depende da ORIGEM, e errá-la produz falso
+ * positivo:
+ *
+ * - Na ESCRITURAÇÃO, o campo IND_OPER do C100 é o próprio declarante dizendo se
+ *   aquilo é entrada ou saída dele. É autoritativo e vem primeiro. Num caso
+ *   real, duas notas de compra de GLP foram escrituradas com o CFOP do
+ *   FORNECEDOR (5660, venda de combustível); decidindo pelo CFOP, viravam saída
+ *   da empresa e apareciam como receita — e ainda geravam um achado de "nota
+ *   sem XML" que não existia.
+ *
+ * - No XML não há IND_OPER: o documento é o mesmo para emitente e destinatário.
+ *   Aí o CFOP decide (1/2/3 entrada, 5/6/7 saída) e, na falta dele, o CNPJ.
  */
 function direcaoReal(
   inv: ParsedInvoice,
   cnpjEmpresa: string | undefined,
+  origem: OrigemNota,
 ): "ENTRADA" | "SAIDA" {
+  // O SPED já diz qual é: respeitar o que o declarante escriturou.
+  if (origem === "ESCRITURACAO") return inv.direction;
+
   const porCfop = direcaoPeloCfop(inv);
   if (porCfop) return porCfop;
 
@@ -183,7 +199,7 @@ export async function persistirNotas(
         modelo: codigoModelo(inv.model),
         serie: inv.series,
         numero: inv.number ?? "",
-        direcao: direcaoReal(inv, cnpjEmpresa),
+        direcao: direcaoReal(inv, cnpjEmpresa, origem),
         origem,
         situacao: situacaoDoCodigo(inv.situationCode),
         dataEmissao: emissao,

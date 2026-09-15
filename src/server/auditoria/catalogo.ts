@@ -324,6 +324,32 @@ const FAMILIA_B: DefinicaoAchado[] = [
       "localizado, somando {valor}.",
   },
   {
+    codigo: "B11",
+    area: "FISCAL",
+    titulo: "Nota de terceiro escriturada como saída da empresa",
+    familia: "RECEITA",
+    severidade: "ALTO",
+    tributo: "ICMS",
+    fontesNecessarias: ["SPED_FISCAL"],
+    descricao:
+      "O registro C100 traz IND_OPER igual a 1 (saída), mas a chave de acesso " +
+      "aponta outro emitente — a nota é de entrada e foi escriturada como " +
+      "venda. Infla a receita e o débito de ICMS do período.",
+    exemplo:
+      "A nota 000906607, chave 52260406980064009562550010009066071, foi " +
+      "emitida pelo CNPJ 06.980.064/0095-62 (fornecedor de GLP) e escriturada " +
+      "com IND_OPER 1 e CFOP 5660 — como se fosse venda da própria empresa, " +
+      "somando R$ 6.673,97 indevidos à receita de 04/2026.",
+    baseLegal: [
+      "Guia Prático da EFD ICMS/IPI — registro C100, campo IND_OPER",
+      "Ajuste SINIEF 02/2009",
+    ],
+    textoCliente:
+      "Em {competencia} há notas emitidas por terceiros escrituradas como " +
+      "saída da empresa, somando {valor}. A receita e o débito de ICMS do " +
+      "período estão inflados nesse valor.",
+  },
+  {
     codigo: "B07",
     area: "FISCAL",
     regimesAplicaveis: ["SIMPLES_NACIONAL"],
