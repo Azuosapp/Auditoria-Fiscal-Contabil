@@ -6,6 +6,10 @@ import {
   type AreaAchado,
   type DefinicaoAchado,
 } from "@/server/auditoria/catalogo";
+import {
+  CatalogoComExemplos,
+  type AreaCatalogo,
+} from "@/components/CatalogoComExemplos";
 
 export const metadata = { title: "Catálogo de achados · Auditoria Azuos" };
 export const dynamic = "force-dynamic";
@@ -37,13 +41,6 @@ const AREAS: { chave: AreaAchado; titulo: string; descricao: string }[] = [
   },
 ];
 
-const CLASSE_SEVERIDADE: Record<string, string> = {
-  CRITICO: "sev sev-critico",
-  ALTO: "sev sev-alto",
-  MEDIO: "sev sev-medio",
-  BAIXO: "sev sev-baixo",
-  OPORTUNIDADE: "sev sev-oportunidade",
-};
 
 
 const ROTULO_REGIME: Record<string, string> = {
@@ -97,6 +94,31 @@ export default async function CatalogoPage() {
       ? [...regimes].map((r) => ROTULO_REGIME[r] ?? r).join(", ")
       : null;
 
+  const areasMontadas: AreaCatalogo[] = AREAS.map((area) => {
+    const daArea = visiveis.filter((d) => d.area === area.chave);
+    const porFamilia = agruparPorFamilia(daArea);
+
+    return {
+      chave: area.chave,
+      titulo: area.titulo,
+      descricao: area.descricao,
+      familias: [...porFamilia.entries()].map(([chave, itens]) => ({
+        chave,
+        nome: NOME_FAMILIA[chave] ?? chave,
+        itens: itens.map((d) => ({
+          codigo: d.codigo,
+          titulo: d.titulo,
+          descricao: d.descricao,
+          exemplo: d.exemplo,
+          severidade: d.severidade,
+          tributo: d.tributo,
+          fontesNecessarias: d.fontesNecessarias,
+          baseLegal: d.baseLegal,
+        })),
+      })),
+    };
+  }).filter((a) => a.familias.length > 0);
+
   return (
     <>
       <div className="mb-3">
@@ -137,88 +159,7 @@ export default async function CatalogoPage() {
         </div>
       </div>
 
-      {AREAS.map((area) => {
-        const daArea = visiveis.filter((d) => d.area === area.chave);
-        if (daArea.length === 0) return null;
-        const porFamilia = agruparPorFamilia(daArea);
-
-        return (
-          <section key={area.chave} className="mb-6">
-            <div
-              className="mb-3 rounded-card p-3"
-              style={{ background: "var(--azuos-light)" }}
-            >
-              <h2 className="text-[13px] font-bold">{area.titulo}</h2>
-              <p className="mt-0.5 text-[10px]">{area.descricao}</p>
-            </div>
-
-            {[...porFamilia.entries()].map(([familia, itens]) => (
-              <div key={familia} className="mb-4">
-                <h3 className="mb-2 text-[11px] font-bold uppercase tracking-[0.5px] text-content-muted">
-                  {NOME_FAMILIA[familia] ?? familia}
-                </h3>
-
-                <div className="tbl-wrap">
-                  <table className="tbl">
-                    <thead>
-                      <tr>
-                        <th className="w-14">Código</th>
-                        <th>Achado</th>
-                        <th className="w-28">Severidade</th>
-                        <th className="w-24">Tributo</th>
-                        <th className="w-40">Documentos necessários</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {itens.map((d) => (
-                        <tr key={d.codigo}>
-                          <td className="font-mono font-semibold">{d.codigo}</td>
-                          <td>
-                            <div className="font-medium">{d.titulo}</div>
-                            <div className="mt-0.5 text-[10px] text-content-muted">
-                              {d.descricao}
-                            </div>
-
-                            {/* O exemplo é o que torna a regra reconhecível:
-                                "divergência entre escriturações" é abstrato;
-                                ver os dois números é o que faz a pessoa
-                                identificar o caso no cliente dela. */}
-                            <div
-                              className="mt-1.5 rounded border-l-2 px-2 py-1 text-[10px]"
-                              style={{
-                                background: "#f8fafc",
-                                borderLeftColor: "var(--azuos-accent)",
-                              }}
-                            >
-                              <span className="font-semibold uppercase tracking-[0.3px] text-content-muted">
-                                Como aparece
-                              </span>
-                              <div className="mt-0.5">{d.exemplo}</div>
-                            </div>
-
-                            <div className="mt-1 text-[10px] text-content-muted">
-                              {d.baseLegal.join(" · ")}
-                            </div>
-                          </td>
-                          <td>
-                            <span className={CLASSE_SEVERIDADE[d.severidade]}>
-                              {d.severidade}
-                            </span>
-                          </td>
-                          <td className="text-[10px]">{d.tributo ?? "—"}</td>
-                          <td className="text-[10px] text-content-muted">
-                            {d.fontesNecessarias.join(", ")}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))}
-          </section>
-        );
-      })}
+      <CatalogoComExemplos areas={areasMontadas} />
     </>
   );
 }
