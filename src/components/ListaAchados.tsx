@@ -1,5 +1,7 @@
+import { Prisma } from "@prisma/client";
 import type { Achado, Evidencia, Lacuna } from "@prisma/client";
 import { competencia as fmtComp, moeda } from "@/lib/formato";
+import { definicaoDe } from "@/server/auditoria/catalogo";
 
 /**
  * Lista de achados de uma área, com a declaração do que não foi analisado.
@@ -49,9 +51,19 @@ type AchadoComEvidencias = Achado & { evidencias: Evidencia[] };
 function ExemploDoErro({
   evidencias,
   severidade,
+  competencia,
+  criterio,
 }: {
   evidencias: Evidencia[];
   severidade: string;
+  /**
+   * Preenchida quando o erro se repete: o exemplo é de UMA competência, e
+   * omitir qual seria deixar o leitor supor que os números valem para o
+   * conjunto inteiro.
+   */
+  competencia?: string | null;
+  /** Como o exemplo foi escolhido entre as ocorrências. */
+  criterio?: "maior valor" | "mais recente";
 }) {
   const exemplos = evidencias.filter((e) => e.tipo === "EXEMPLO");
   const confrontos = evidencias.filter((e) => e.tipo === "CONFRONTO");
@@ -85,6 +97,9 @@ function ExemploDoErro({
     <details className="mt-2 rounded-md border border-surface-border">
       <summary className="cursor-pointer px-2 py-1 text-[10px] font-medium text-content-muted">
         {oportunidade ? "Ver a base da recomendação" : "Ver o exemplo deste erro"}
+        {competencia ? (
+          <span className="font-normal"> em {fmtComp(competencia)}</span>
+        ) : null}
         {partes.length > 0 ? (
           <span className="font-normal"> — {partes.join(" · ")}</span>
         ) : null}
@@ -167,6 +182,9 @@ function ExemploDoErro({
           </div>
 
           <div className="border-t border-surface-border px-2 py-1 text-[9px] text-content-muted">
+            {competencia
+              ? `Exemplo de ${fmtComp(competencia)}, a ocorrência de ${criterio ?? "maior valor"}. `
+              : ""}
             {[...new Set(exemplos.map((e) => e.arquivo))].join(" · ")}
             {temDocumento && exemplos[0]?.observacao
               ? ` — ${exemplos[0].observacao}`
@@ -191,6 +209,98 @@ function ExemploDoErro({
   );
 }
 
+/**
+ * Um card por tipo de erro, não por ocorrência.
+ *
+ * O mesmo erro costuma se repetir competência a competência — oito meses de
+ * B05, oito de C02. Repetir o card inteiro oito vezes enterra os outros
+ * achados e faz a auditoria parecer maior do que é: são dois problemas, não
+ * dezesseis. O card passa a dizer o tipo do erro, em quantas competências
+ * apareceu e quanto soma; dentro, a distribuição mês a mês e UM exemplo.
+ *
+ * Decaído fica fora do agrupamento: mistura de exigível com decaído no mesmo
+ * total diria que há dinheiro em risco onde já não há.
+ */
+interface GrupoAchado {
+  codigo: string;
+  titulo: string;
+  severidade: string;
+  /** A ocorrência escolhida para ilustrar: a de maior valor. */
+  representante: AchadoComEvidencias;
+  ocorrencias: AchadoComEvidencias[];
+  total: Prisma.Decimal;
+  /** A menor confiança do grupo: o card não pode prometer mais que a pior. */
+  confianca: string;
+  /** Por que esta ocorrência foi escolhida para ilustrar. */
+  criterio: "maior valor" | "mais recente";
+}
+
+function agrupar(achados: AchadoComEvidencias[]): GrupoAchado[] {
+  const mapa = new Map<string, AchadoComEvidencias[]>();
+  for (const a of achados) {
+    const lista = mapa.get(a.codigo) ?? [];
+    lista.push(a);
+    mapa.set(a.codigo, lista);
+  }
+
+  const grupos: GrupoAchado[] = [];
+  for (const [codigo, lista] of mapa) {
+    const ordenadas = [...lista].sort((x, y) =>
+      (x.competencia ?? "").localeCompare(y.competencia ?? ""),
+    );
+    const total = lista.reduce(
+      (soma, a) => soma.plus(a.valorExposicao ?? 0),
+      new Prisma.Decimal(0),
+    );
+    // Ilustra o de maior valor — é o que o cliente quer entender primeiro.
+    // Sem valor nenhum (achado que não gera exposição, como o CST genérico),
+    // maior valor não quer dizer nada: vale a ocorrência mais recente, que é
+    // a que ainda dá para corrigir dentro do prazo.
+    const semValor = total.isZero();
+    const representante = semValor
+      ? ordenadas[ordenadas.length - 1]
+      : [...lista].sort((x, y) =>
+          new Prisma.Decimal(y.valorExposicao ?? 0)
+            .minus(x.valorExposicao ?? 0)
+            .toNumber(),
+        )[0];
+    const confianca = lista.some((a) => a.confianca === "BAIXA")
+      ? "BAIXA"
+      : lista.some((a) => a.confianca === "MEDIA")
+        ? "MEDIA"
+        : "ALTA";
+
+    grupos.push({
+      codigo,
+      titulo: representante.titulo,
+      severidade: representante.severidade,
+      representante,
+      ocorrencias: ordenadas,
+      total,
+      confianca,
+      criterio: semValor ? "mais recente" : "maior valor",
+    });
+  }
+
+  return grupos.sort(
+    (a, b) =>
+      ORDEM_SEVERIDADE.indexOf(a.severidade) -
+        ORDEM_SEVERIDADE.indexOf(b.severidade) ||
+      b.total.comparedTo(a.total),
+  );
+}
+
+/** "01/2026, 02/2026 e mais 6" — o período coberto, sem listar tudo no topo. */
+function resumoCompetencias(ocorrencias: AchadoComEvidencias[]): string | null {
+  const comps = ocorrencias
+    .map((o) => o.competencia)
+    .filter((c): c is string => Boolean(c))
+    .sort();
+  if (comps.length === 0) return null;
+  if (comps.length === 1) return fmtComp(comps[0]);
+  return `${comps.length} competências · ${fmtComp(comps[0])} a ${fmtComp(comps[comps.length - 1])}`;
+}
+
 export function ListaAchados({
   achados,
   lacunas,
@@ -211,6 +321,7 @@ export function ListaAchados({
   const exigiveis = ordenados.filter((a) => a.situacaoPrescricional !== "DECAIDO");
   const decaidos = ordenados.filter((a) => a.situacaoPrescricional === "DECAIDO");
   const aDecair = ordenados.filter((a) => a.situacaoPrescricional === "A_DECAIR");
+  const grupos = agrupar(exigiveis);
 
   return (
     <>
@@ -234,67 +345,129 @@ export function ListaAchados({
         </div>
       ) : (
         <div className="space-y-3">
-          {exigiveis.map((a) => (
-            <article key={a.id} className="achado" data-sev={a.severidade}>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-[11px] font-bold">{a.codigo}</span>
-                <span className={CLASSE_SEV[a.severidade]}>{a.severidade}</span>
-                <span className="text-[12px] font-semibold">{a.titulo}</span>
-                {a.competencia ? (
-                  <span className="font-mono text-[10px] text-content-muted">
-                    {fmtComp(a.competencia)}
-                  </span>
-                ) : null}
-                {a.confianca !== "ALTA" ? (
-                  <span className="sev sev-baixo">
-                    confiança {ROTULO_CONFIANCA[a.confianca] ?? a.confianca}
-                  </span>
-                ) : null}
-                {a.valorExposicao ? (
-                  <span className="ml-auto font-mono text-[13px] font-bold">
-                    {moeda(a.valorExposicao)}
-                  </span>
-                ) : null}
-              </div>
+          {grupos.map((g) => {
+            const a = g.representante;
+            const repetido = g.ocorrencias.length > 1;
+            const periodo = resumoCompetencias(g.ocorrencias);
+            return (
+              <article key={g.codigo} className="achado" data-sev={g.severidade}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-[11px] font-bold">{g.codigo}</span>
+                  <span className={CLASSE_SEV[g.severidade]}>{g.severidade}</span>
+                  <span className="text-[12px] font-semibold">{g.titulo}</span>
+                  {periodo ? (
+                    <span className="font-mono text-[10px] text-content-muted">
+                      {periodo}
+                    </span>
+                  ) : null}
+                  {g.confianca !== "ALTA" ? (
+                    <span className="sev sev-baixo">
+                      confiança {ROTULO_CONFIANCA[g.confianca] ?? g.confianca}
+                    </span>
+                  ) : null}
+                  {!g.total.isZero() ? (
+                    <span className="ml-auto font-mono text-[13px] font-bold">
+                      {moeda(g.total)}
+                    </span>
+                  ) : null}
+                </div>
 
-              <p className="mt-2 text-[11px]">{a.textoCliente ?? a.descricao}</p>
-
-              {a.textoCliente ? (
-                <p className="mt-1 text-[10px] text-content-muted">{a.descricao}</p>
-              ) : null}
-
-              {a.recomendacao ? (
-                <p className="mt-2 text-[10px]">
-                  <strong>O que fazer:</strong> {a.recomendacao}
+                {/*
+                  Com uma ocorrência só, o texto do achado já descreve o caso.
+                  Com várias, ele fala de um mês específico e enganaria no card
+                  do conjunto — então o conjunto é descrito aqui, e o texto de
+                  cada mês vai para a tabela de competências.
+                */}
+                {/*
+                  A descrição do achado traz os números da competência dele.
+                  No card do conjunto isso engana: o leitor toma o valor de um
+                  mês pelo total. Aqui entra a descrição genérica do catálogo,
+                  que vale para todas as ocorrências; os números de cada mês
+                  ficam na tabela de competências.
+                */}
+                <p className="mt-2 text-[11px]">
+                  {repetido
+                    ? `O mesmo erro se repete em ${g.ocorrencias.length} competências${
+                        g.total.isZero() ? "" : `, somando ${moeda(g.total)}`
+                      }. ${definicaoDe(g.codigo).descricao}`
+                    : (a.textoCliente ?? a.descricao)}
                 </p>
-              ) : null}
 
-              {a.ressalva ? (
-                <p
-                  className="mt-2 rounded px-2 py-1 text-[10px]"
-                  style={{ background: "#f1f5f9" }}
-                >
-                  <strong>Ressalva:</strong> {a.ressalva}
-                </p>
-              ) : null}
+                {!repetido && a.textoCliente ? (
+                  <p className="mt-1 text-[10px] text-content-muted">
+                    {a.descricao}
+                  </p>
+                ) : null}
 
-              <ExemploDoErro
-                evidencias={a.evidencias}
-                severidade={a.severidade}
-              />
+                {a.recomendacao ? (
+                  <p className="mt-2 text-[10px]">
+                    <strong>O que fazer:</strong> {a.recomendacao}
+                  </p>
+                ) : null}
 
-              <div className="mt-2 flex flex-wrap gap-3 text-[9px] text-content-muted">
-                <span>{a.baseLegal.join(" · ")}</span>
-                <span className="ml-auto">
-                  {ROTULO_PRESCRICAO[a.situacaoPrescricional]}
-                  {a.decaiEm
-                    ? ` até ${a.decaiEm.toLocaleDateString("pt-BR", { timeZone: "UTC" })}`
-                    : ""}
-                  {a.regraDecadencia ? ` · ${a.regraDecadencia}` : ""}
-                </span>
-              </div>
-            </article>
-          ))}
+                {a.ressalva ? (
+                  <p
+                    className="mt-2 rounded px-2 py-1 text-[10px]"
+                    style={{ background: "#f1f5f9" }}
+                  >
+                    <strong>Ressalva:</strong> {a.ressalva}
+                  </p>
+                ) : null}
+
+                {repetido ? (
+                  <details className="mt-2 rounded-md border border-surface-border">
+                    <summary className="cursor-pointer px-2 py-1 text-[10px] font-medium text-content-muted">
+                      Ver as {g.ocorrencias.length} competências afetadas
+                    </summary>
+                    <div className="border-t border-surface-border">
+                      <table className="tbl !text-[10px]">
+                        <thead>
+                          <tr>
+                            <th className="w-24">Competência</th>
+                            <th>O que foi encontrado</th>
+                            {g.total.isZero() ? null : (
+                              <th className="w-32">Valor</th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {g.ocorrencias.map((o) => (
+                            <tr key={o.id}>
+                              <td className="font-mono">
+                                {o.competencia ? fmtComp(o.competencia) : "—"}
+                              </td>
+                              <td>{o.textoCliente ?? o.descricao}</td>
+                              {g.total.isZero() ? null : (
+                                <td className="num">{moeda(o.valorExposicao)}</td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                ) : null}
+
+                <ExemploDoErro
+                  evidencias={a.evidencias}
+                  severidade={g.severidade}
+                  competencia={repetido ? a.competencia : null}
+                  criterio={g.criterio}
+                />
+
+                <div className="mt-2 flex flex-wrap gap-3 text-[9px] text-content-muted">
+                  <span>{a.baseLegal.join(" · ")}</span>
+                  <span className="ml-auto">
+                    {ROTULO_PRESCRICAO[a.situacaoPrescricional]}
+                    {a.decaiEm
+                      ? ` até ${a.decaiEm.toLocaleDateString("pt-BR", { timeZone: "UTC" })}`
+                      : ""}
+                    {a.regraDecadencia ? ` · ${a.regraDecadencia}` : ""}
+                  </span>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
 

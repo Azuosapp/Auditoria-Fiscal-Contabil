@@ -743,6 +743,22 @@ function Verificacao({ item }: { item: ItemVerificado }) {
     new Prisma.Decimal(0),
   );
 
+  // Ilustra o de maior valor — é o que o cliente quer entender primeiro. Sem
+  // valor nenhum (achado que não gera exposição), maior valor não diz nada:
+  // vale a ocorrência mais recente, a que ainda dá para corrigir no prazo.
+  const semValor = total.isZero();
+  const porCompetencia = [...achados].sort((x, y) =>
+    (x.competencia ?? "").localeCompare(y.competencia ?? ""),
+  );
+  const representante = semValor
+    ? porCompetencia[porCompetencia.length - 1]
+    : [...achados].sort((x, y) =>
+        new Prisma.Decimal(y.valorExposicao ?? 0)
+          .minus(x.valorExposicao ?? 0)
+          .toNumber(),
+      )[0];
+  const criterio = semValor ? "mais recente" : "maior valor";
+
   return (
     <div
       className="rel-achado"
@@ -802,38 +818,106 @@ function Verificacao({ item }: { item: ItemVerificado }) {
         </div>
       ) : null}
 
-      {/* Com apontamento: cada ocorrência, com competência, prova e providência. */}
-      {achados.map((a) => (
-        <div
-          key={a.id}
-          style={{
-            marginTop: "2mm",
-            paddingTop: "1.5mm",
-            borderTop: achados.length > 1 ? "1px dotted var(--border)" : "none",
-          }}
-        >
-          <div style={{ fontSize: "9pt" }}>
-            {a.competencia ? (
-              <strong>{fmtComp(a.competencia)} · </strong>
-            ) : null}
-            {a.textoCliente ?? a.descricao}
+      {/*
+        Com apontamento. O mesmo erro costuma se repetir mês a mês: repetir o
+        bloco inteiro — texto, providência, ressalva e exemplo — oito vezes
+        encheria o relatório de páginas idênticas e faria a auditoria parecer
+        oito problemas onde há um. Uma vez, portanto: a distribuição por
+        competência em tabela, e o exemplo da maior ocorrência.
+      */}
+      {achados.length > 1 ? (
+        <div style={{ marginTop: "2mm" }}>
+          <div style={{ fontSize: "9pt", marginBottom: "1.5mm" }}>
+            <strong>
+              O mesmo erro se repete em {achados.length} competências
+              {!total.isZero() ? `, somando ${moeda(total)}` : ""}.
+            </strong>{" "}
+            {definicao.descricao}
           </div>
 
-          {a.recomendacao ? (
+          <div className="exemplo">
+            <div className="exemplo-titulo">Competências afetadas</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: "22mm" }}>Competência</th>
+                  <th>O que foi encontrado</th>
+                  {total.isZero() ? null : (
+                    <th className="num" style={{ width: "30mm" }}>
+                      Valor
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {porCompetencia.map((a) => (
+                  <tr key={a.id}>
+                    <td>
+                      <strong>
+                        {a.competencia ? fmtComp(a.competencia) : "—"}
+                      </strong>
+                    </td>
+                    <td>{a.textoCliente ?? a.descricao}</td>
+                    {total.isZero() ? null : (
+                      <td className="num">{moeda(a.valorExposicao)}</td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {representante.recomendacao ? (
             <div className="rel-obs">
-              <strong>Providência recomendada:</strong> {a.recomendacao}
+              <strong>Providência recomendada:</strong>{" "}
+              {representante.recomendacao}
             </div>
           ) : null}
 
-          {a.ressalva ? (
+          {representante.ressalva ? (
             <div className="rel-ressalva">
-              <strong>Ressalva:</strong> {a.ressalva}
+              <strong>Ressalva:</strong> {representante.ressalva}
             </div>
           ) : null}
 
-          <Exemplos evidencias={a.evidencias} severidade={a.severidade} />
+          {representante.competencia ? (
+            <div className="rel-obs">
+              Exemplo de {fmtComp(representante.competencia)}, a ocorrência
+              de {criterio}.
+            </div>
+          ) : null}
+
+          <Exemplos
+            evidencias={representante.evidencias}
+            severidade={representante.severidade}
+          />
         </div>
-      ))}
+      ) : (
+        achados.map((a) => (
+          <div key={a.id} style={{ marginTop: "2mm" }}>
+            <div style={{ fontSize: "9pt" }}>
+              {a.competencia ? (
+                <strong>{fmtComp(a.competencia)} · </strong>
+              ) : null}
+              {a.textoCliente ?? a.descricao}
+            </div>
+
+            {a.recomendacao ? (
+              <div className="rel-obs">
+                <strong>Providência recomendada:</strong> {a.recomendacao}
+              </div>
+            ) : null}
+
+            {a.ressalva ? (
+              <div className="rel-ressalva">
+                <strong>Ressalva:</strong> {a.ressalva}
+              </div>
+            ) : null}
+
+            <Exemplos evidencias={a.evidencias} severidade={a.severidade} />
+          </div>
+        ))
+      )}
 
       <div className="rel-obs">{definicao.baseLegal.join(" · ")}</div>
     </div>

@@ -293,10 +293,12 @@ const FAMILIA_B: DefinicaoAchado[] = [
       "EFD-Contribuições da mesma competência. São duas declarações da própria " +
       "empresa, entregues ao mesmo fisco, que precisam conversar.",
     exemplo:
-      "Em 01/2026 o SPED Fiscal soma R$ 440.699,96 em saídas escrituradas, " +
-      "enquanto a base de cálculo do PIS no registro M210 da " +
-      "EFD-Contribuições é de R$ 325.273,60 — diferença de R$ 115.426,36 " +
-      "(26,2%).",
+      "O SPED Fiscal de março soma R$ 500.000,00 em notas de saída. Descontado " +
+      "o IPI destacado de R$ 16.000,00, que não é receita, restam " +
+      "R$ 484.000,00 a comparar. A base de PIS no registro M210 da " +
+      "EFD-Contribuições é de R$ 430.000,00 — sobram R$ 54.000,00 (11,2%) " +
+      "fora da base, sem que a escrituração mostre a exclusão que os " +
+      "justifique.",
     baseLegal: ["IN RFB nº 2.121/2022", "Guia Prático da EFD-Contribuições"],
     textoCliente:
       "As duas escriturações entregues ao fisco em {competencia} apresentam " +
