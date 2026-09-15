@@ -309,7 +309,74 @@ async function gravarLacunas(
     }
   }
 
+  await declararXmlsFaltantes(auditoriaId);
+
   return presentes.size > 0 ? ausentes : [];
+}
+
+/**
+ * Competências em que o SPED escriturou nota cujo XML não veio na coleta.
+ *
+ * Isto NÃO é achado: na prática significa apenas que o cliente não baixou todos
+ * os XMLs, e apontar como erro mandaria o auditor procurar documento que existe
+ * e está guardado em outro lugar. Mas também não pode sumir: sem o XML, a
+ * comparação entre emitido e escriturado fica incompleta naquela competência, e
+ * quem lê o relatório precisa saber disso antes de concluir que está tudo certo.
+ *
+ * Por isso vira lacuna — que é a seção onde o relatório diz o que não pôde ser
+ * verificado e por quê.
+ */
+async function declararXmlsFaltantes(auditoriaId: string): Promise<void> {
+  const [escrituradas, xmls] = await Promise.all([
+    prisma.notaFiscal.findMany({
+      where: {
+        documento: { auditoriaId },
+        origem: "ESCRITURACAO",
+        situacao: "AUTORIZADA",
+        chave: { not: null },
+      },
+      select: { chave: true, competencia: true },
+    }),
+    prisma.notaFiscal.findMany({
+      where: {
+        documento: { auditoriaId },
+        origem: "XML_AUTORIZADO",
+        chave: { not: null },
+      },
+      select: { chave: true },
+    }),
+  ]);
+
+  if (escrituradas.length === 0) return;
+
+  const comXml = new Set(xmls.map((x) => x.chave!));
+  const faltandoPorCompetencia = new Map<string, number>();
+
+  for (const n of escrituradas) {
+    if (comXml.has(n.chave!)) continue;
+    faltandoPorCompetencia.set(
+      n.competencia,
+      (faltandoPorCompetencia.get(n.competencia) ?? 0) + 1,
+    );
+  }
+
+  for (const [competencia, quantidade] of faltandoPorCompetencia) {
+    await prisma.lacuna.create({
+      data: {
+        auditoriaId,
+        escopo: `Competência ${mesAno(competencia)} — ${quantidade} nota(s) sem XML`,
+        area: "FISCAL",
+        documentoFaltante: "NFE_XML",
+        competencia,
+        descricao:
+          `${quantidade} nota(s) escriturada(s) no SPED Fiscal de ${mesAno(competencia)} ` +
+          `não têm o documento eletrônico entre os arquivos analisados. A ` +
+          `comparação entre o emitido e o escriturado fica incompleta nesta ` +
+          `competência — obter os XMLs na distribuição DF-e da SEFAZ e ` +
+          `reimportar amplia o alcance da auditoria.`,
+      },
+    });
+  }
 }
 
 /**

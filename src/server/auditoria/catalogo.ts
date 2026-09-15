@@ -303,27 +303,6 @@ const FAMILIA_B: DefinicaoAchado[] = [
       "receitas diferentes, com diferença de {valor}.",
   },
   {
-    codigo: "B10",
-    area: "FISCAL",
-    titulo: "Nota escriturada sem XML correspondente",
-    familia: "RECEITA",
-    severidade: "MEDIO",
-    tributo: "ICMS",
-    fontesNecessarias: ["NFE_XML", "SPED_FISCAL"],
-    descricao:
-      "O SPED Fiscal escriturou nota cuja chave de acesso não aparece entre os " +
-      "XMLs entregues. Ou o XML não foi entregue na coleta, ou foi escriturado " +
-      "documento que não existe.",
-    exemplo:
-      "O registro C100 de 03/2026 escritura a nota 11447, chave " +
-      "52260307903652000185550010000114471, por R$ 784,18, e esse XML não " +
-      "está entre os arquivos entregues.",
-    baseLegal: ["RCTE-GO, art. 308", "Ajuste SINIEF 07/2005"],
-    textoCliente:
-      "Em {competencia} há notas escrituradas cujo documento eletrônico não foi " +
-      "localizado, somando {valor}.",
-  },
-  {
     codigo: "B11",
     area: "FISCAL",
     titulo: "Nota de terceiro escriturada como saída da empresa",

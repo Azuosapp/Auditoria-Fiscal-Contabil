@@ -18,7 +18,7 @@ const ZERO = new Prisma.Decimal(0);
 const TOLERANCIA = new Prisma.Decimal("0.02");
 
 export const familiaB: Regra = {
-  codigos: ["B01", "B02", "B03", "B05", "B07", "B10", "B11"],
+  codigos: ["B01", "B02", "B03", "B05", "B07", "B11"],
 
   async executar(ctx: ContextoRegra): Promise<AchadoProduzido[]> {
     const achados: AchadoProduzido[] = [];
@@ -28,7 +28,6 @@ export const familiaB: Regra = {
     achados.push(...(await b03CanceladaEscriturada(ctx)));
     achados.push(...(await b05ReceitaDivergenteEntreEscrituracoes(ctx)));
     achados.push(...(await b07ReceitaPgdasMenorQueReal(ctx)));
-    achados.push(...(await b10EscrituradaSemXml(ctx)));
     achados.push(...(await b11NotaDeTerceiroComoSaida(ctx)));
 
     return achados;
@@ -541,112 +540,6 @@ async function b07ReceitaPgdasMenorQueReal(
   }
 
   return achados;
-}
-
-/**
- * B10 — nota escriturada cuja chave não aparece entre os XMLs entregues.
- *
- * É o inverso do B01, e a leitura honesta é outra: na prática, quase sempre
- * significa que o XML não veio na coleta — o cliente baixou o SPED completo mas
- * só parte dos XMLs. Por isso nasce com severidade MÉDIA e confiança MÉDIA, e o
- * texto diz as duas hipóteses. Tratar como "documento inexistente" seria
- * acusação grave apoiada em ausência de arquivo.
- *
- * Ainda assim vale apontar: se o XML realmente não existir, há escrituração de
- * documento inidôneo — e, se existir, a auditoria está incompleta naquele mês e
- * o auditor precisa saber disso.
- */
-async function b10EscrituradaSemXml(
-  ctx: ContextoRegra,
-): Promise<AchadoProduzido[]> {
-  if (
-    !ctx.fontesDisponiveis.has("SPED_FISCAL") ||
-    !ctx.fontesDisponiveis.has("NFE_XML")
-  ) {
-    return [];
-  }
-
-  const [escrituradas, xmls] = await Promise.all([
-    prisma.notaFiscal.findMany({
-      where: {
-        documento: { auditoriaId: ctx.auditoriaId },
-        origem: "ESCRITURACAO",
-        direcao: "SAIDA",
-        situacao: "AUTORIZADA",
-        chave: { not: null },
-      },
-      select: {
-        chave: true,
-        numero: true,
-        competencia: true,
-        valorTotal: true,
-        dataEmissao: true,
-      },
-    }),
-    prisma.notaFiscal.findMany({
-      where: {
-        documento: { auditoriaId: ctx.auditoriaId },
-        origem: "XML_AUTORIZADO",
-        chave: { not: null },
-      },
-      select: { chave: true },
-    }),
-  ]);
-
-  const chavesComXml = new Set(xmls.map((x) => x.chave!));
-
-  const porCompetencia = new Map<
-    string,
-    { quantidade: number; soma: Prisma.Decimal; exemplos: typeof escrituradas }
-  >();
-
-  for (const n of escrituradas) {
-    if (chavesComXml.has(n.chave!)) continue;
-
-    const atual = porCompetencia.get(n.competencia) ?? {
-      quantidade: 0,
-      soma: ZERO,
-      exemplos: [],
-    };
-    atual.quantidade += 1;
-    atual.soma = atual.soma.plus(n.valorTotal);
-    if (atual.exemplos.length < 10) atual.exemplos.push(n);
-    porCompetencia.set(n.competencia, atual);
-  }
-
-  return [...porCompetencia.entries()].map(([competencia, d]) => ({
-    codigo: "B10",
-    competencia,
-    confianca: "MEDIA" as const,
-    descricao:
-      `${d.quantidade} nota(s) escriturada(s) no SPED Fiscal sem XML ` +
-      `correspondente entre os arquivos entregues, somando ${moeda(d.soma)}.`,
-    textoCliente:
-      `Em ${mesAno(competencia)} há ${d.quantidade} nota(s) escriturada(s), ` +
-      `somando ${moeda(d.soma)}, cujo documento eletrônico não foi localizado ` +
-      `entre os arquivos analisados.`,
-    recomendacao:
-      "Obter os XMLs faltantes na distribuição DF-e da SEFAZ e reimportar. " +
-      "Persistindo a ausência, verificar se houve escrituração de documento " +
-      "inexistente.",
-    valorExposicao: d.soma,
-    declarado: true,
-    ressalva:
-      "Na maior parte dos casos significa apenas que o XML não veio na coleta, " +
-      "e não que o documento não exista. Só há irregularidade se o documento " +
-      "realmente não constar na SEFAZ. Enquanto isso, a auditoria está " +
-      "incompleta nesta competência.",
-    evidencias: d.exemplos.map((e) => ({
-      tipo: "EXEMPLO" as const,
-      arquivo: `SPED Fiscal ${mesAno(competencia)} · XML não localizado`,
-      registro: "C100",
-      documentoNumero: e.numero,
-      chave: e.chave ?? undefined,
-      dataDocumento: e.dataEmissao.toLocaleDateString("pt-BR", { timeZone: "UTC" }),
-      valor: moeda(e.valorTotal),
-      observacao: "escriturada no SPED, sem documento eletrônico entre os arquivos",
-    })),
-  }));
 }
 
 /**
