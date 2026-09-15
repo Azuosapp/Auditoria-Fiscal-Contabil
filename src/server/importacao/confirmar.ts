@@ -23,14 +23,28 @@ export interface DadosConfirmacao {
   competenciaFim: string;
   titulo?: string;
   regimes?: { exercicio: number; regime: RegimeTributario; origem?: string }[];
+  /**
+   * Id da auditoria que deve receber estes arquivos. Quando ausente, o sistema
+   * reaproveita a auditoria aberta da empresa (o normal) e só cria uma nova se
+   * não houver nenhuma.
+   */
+  auditoriaId?: string;
+  /** Força auditoria nova mesmo havendo uma aberta — trabalho separado, a pedido. */
+  criarNova?: boolean;
 }
 
 export interface ResultadoConfirmacao {
   auditoriaId: string;
   empresaId: string;
   empresaCriada: boolean;
+  /** `false` quando os arquivos entraram numa auditoria que já existia. */
+  auditoriaCriada: boolean;
   documentosRegistrados: number;
+  /** Arquivos já presentes na auditoria, reconhecidos pelo hash e ignorados. */
   documentosDuplicados: number;
+  /** Período depois de absorver as competências do novo lote. */
+  competenciaIni: string;
+  competenciaFim: string;
 }
 
 const NOME_ORGANIZACAO_PADRAO = "Analyze Auditoria e Consultoria Tributária";
@@ -113,21 +127,65 @@ export async function confirmarLote(
       });
     }
 
-    const auditoria = await tx.auditoria.create({
-      data: {
-        empresaId: empresa.id,
-        titulo:
-          dados.titulo ??
-          `Auditoria ${dados.competenciaIni.slice(0, 4)}–${dados.competenciaFim.slice(0, 4)}`,
-        competenciaIni: dados.competenciaIni,
-        competenciaFim: dados.competenciaFim,
-        status: "IMPORTANDO",
-      },
-    });
+    // A auditoria da empresa é UMA. O cliente manda os arquivos em várias
+    // levas — SPED numa, XMLs em outra, PDFs depois — e todas precisam desaguar
+    // no mesmo trabalho: é justamente o cruzamento entre elas que produz achado.
+    // Criar uma auditoria por leva separaria os dois lados do cruzamento e o
+    // sistema não acharia nada.
+    const existente = dados.auditoriaId
+      ? await tx.auditoria.findFirst({
+          where: { id: dados.auditoriaId, empresaId: empresa.id },
+        })
+      : dados.criarNova
+        ? null
+        : await tx.auditoria.findFirst({
+            where: {
+              empresaId: empresa.id,
+              // Trabalho entregue ou arquivado não recebe arquivo novo: o que
+              // foi apresentado ao cliente não pode mudar por baixo.
+              status: { notIn: ["ENTREGUE", "ARQUIVADA"] },
+            },
+            orderBy: { createdAt: "desc" },
+          });
+
+    // O período acompanha o que chegou: importar agosto numa auditoria que ia
+    // até março tem de esticar o período, senão o mês novo fica fora de toda
+    // regra que percorre a competência.
+    const competenciaIni =
+      existente && existente.competenciaIni < dados.competenciaIni
+        ? existente.competenciaIni
+        : dados.competenciaIni;
+    const competenciaFim =
+      existente && existente.competenciaFim > dados.competenciaFim
+        ? existente.competenciaFim
+        : dados.competenciaFim;
+
+    const auditoria = existente
+      ? await tx.auditoria.update({
+          where: { id: existente.id },
+          data: { competenciaIni, competenciaFim, status: "IMPORTANDO" },
+        })
+      : await tx.auditoria.create({
+          data: {
+            empresaId: empresa.id,
+            titulo:
+              dados.titulo ??
+              `Auditoria ${competenciaIni.slice(0, 4)}–${competenciaFim.slice(0, 4)}`,
+            competenciaIni,
+            competenciaFim,
+            status: "IMPORTANDO",
+          },
+        });
 
     // O hash impede que o mesmo arquivo entre duas vezes — o que acontece o
-    // tempo todo quando o cliente manda o pacote de novo "por garantia".
-    const vistos = new Set<string>();
+    // tempo todo quando o cliente manda o pacote de novo "por garantia". A
+    // conferência é contra o que JÁ existe na auditoria, não só dentro do lote.
+    const jaNaAuditoria = await tx.documento.findMany({
+      where: { auditoriaId: auditoria.id },
+      select: { hash: true },
+    });
+    const vistos = new Set(jaNaAuditoria.map((d) => d.hash));
+
     let registrados = 0;
     let duplicados = 0;
 
@@ -169,8 +227,11 @@ export async function confirmarLote(
     return {
       auditoriaId: auditoria.id,
       empresaId: empresa.id,
+      auditoriaCriada: !existente,
       documentosRegistrados: registrados,
       documentosDuplicados: duplicados,
+      competenciaIni,
+      competenciaFim,
     };
   });
 

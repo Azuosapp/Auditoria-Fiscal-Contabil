@@ -2,7 +2,11 @@ import { PainelImportacao } from "@/components/PainelImportacao";
 
 export const metadata = { title: "Importar arquivos · Auditoria Azuos" };
 
-export default function ImportarPage() {
+export default function ImportarPage({
+  searchParams,
+}: {
+  searchParams: { auditoria?: string };
+}) {
   return (
     <>
       <div className="mb-4">
@@ -14,7 +18,7 @@ export default function ImportarPage() {
         </p>
       </div>
 
-      <PainelImportacao />
+      <PainelImportacao auditoriaAlvo={searchParams.auditoria} />
     </>
   );
 }

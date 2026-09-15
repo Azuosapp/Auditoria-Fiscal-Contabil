@@ -135,7 +135,10 @@ export default async function AuditoriaPage({
           <Link href={`/auditorias/${auditoria.id}/achados`} className="btn-primary">
             Ver achados ({auditoria._count.achados})
           </Link>
-          <Link href="/importar" className="btn-ghost">
+          <Link
+            href={`/importar?auditoria=${auditoria.id}`}
+            className="btn-ghost"
+          >
             Importar mais arquivos
           </Link>
         </div>

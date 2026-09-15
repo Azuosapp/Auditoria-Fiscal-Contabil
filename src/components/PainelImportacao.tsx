@@ -81,7 +81,20 @@ function mb(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function PainelImportacao() {
+interface AuditoriaAberta {
+  id: string;
+  titulo: string;
+  competenciaIni: string;
+  competenciaFim: string;
+  _count: { documentos: number };
+}
+
+export function PainelImportacao({
+  auditoriaAlvo,
+}: {
+  /** Quando a importação parte de dentro de uma auditoria, os arquivos vão para ela. */
+  auditoriaAlvo?: string;
+} = {}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -92,6 +105,9 @@ export function PainelImportacao() {
 
   const [loteId, setLoteId] = useState<string | null>(null);
   const [analise, setAnalise] = useState<Analise | null>(null);
+  const [auditoriaAberta, setAuditoriaAberta] = useState<AuditoriaAberta | null>(null);
+  // Só muda para true quando o usuário pedir explicitamente um trabalho separado.
+  const [separar, setSepararTrabalho] = useState(false);
 
   // Campos editáveis: vêm preenchidos pela análise e o usuário só toca se errou.
   const [cnpj, setCnpj] = useState("");
@@ -121,6 +137,7 @@ export function PainelImportacao() {
       const a = json.analise as Analise;
       setLoteId(json.loteId);
       setAnalise(a);
+      setAuditoriaAberta(json.auditoriaAberta ?? null);
       setCnpj(a.identificacao.empresa?.cnpj ?? "");
       setRazaoSocial(a.identificacao.empresa?.razaoSocial ?? "");
       setUf(a.identificacao.empresa?.uf ?? "");
@@ -142,6 +159,8 @@ export function PainelImportacao() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          auditoriaId: auditoriaAlvo,
+          criarNova: separar,
           cnpj: cnpj.replace(/\D/g, ""),
           razaoSocial,
           uf: uf || undefined,
@@ -173,6 +192,8 @@ export function PainelImportacao() {
   function recomecar() {
     setLoteId(null);
     setAnalise(null);
+    setAuditoriaAberta(null);
+    setSepararTrabalho(false);
     setErro(null);
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -308,6 +329,48 @@ export function PainelImportacao() {
           <div className="kpi-val text-[15px]">{id.confianca}</div>
         </div>
       </div>
+
+      {auditoriaAberta && !auditoriaAlvo ? (
+        <div
+          className="mb-3 rounded-card p-3"
+          style={{ background: "var(--azuos-light)" }}
+        >
+          <div className="text-[11px] font-bold">
+            Esta empresa já tem auditoria aberta
+          </div>
+          <p className="mt-1 text-[10px]">
+            <strong>{auditoriaAberta.titulo}</strong> ·{" "}
+            {fmtComp(auditoriaAberta.competenciaIni)} a{" "}
+            {fmtComp(auditoriaAberta.competenciaFim)} ·{" "}
+            {auditoriaAberta._count.documentos} documento(s).
+          </p>
+          <p className="mt-1 text-[10px] text-content-muted">
+            Por padrão estes arquivos entram nessa mesma auditoria, somando-se
+            aos que já estão lá — é o cruzamento entre eles que produz achado.
+            Arquivo repetido é reconhecido pelo conteúdo e ignorado, e o período
+            é esticado para cobrir as novas competências.
+          </p>
+          <label className="mt-2 flex cursor-pointer items-center gap-2 text-[10px]">
+            <input
+              type="checkbox"
+              checked={separar}
+              onChange={(e) => setSepararTrabalho(e.target.checked)}
+            />
+            Criar uma auditoria separada para estes arquivos (não recomendado —
+            separa os dois lados do cruzamento)
+          </label>
+        </div>
+      ) : null}
+
+      {auditoriaAlvo ? (
+        <div
+          className="mb-3 rounded-card p-3 text-[10px]"
+          style={{ background: "var(--azuos-light)" }}
+        >
+          Estes arquivos serão somados à auditoria aberta, junto com os que já
+          foram importados.
+        </div>
+      ) : null}
 
       <div className="card mb-3">
         <div className="mb-2 flex items-center gap-2">
@@ -490,7 +553,11 @@ export function PainelImportacao() {
           disabled={!podeConfirmar || confirmando}
           onClick={() => void confirmar()}
         >
-          {confirmando ? "Criando…" : "Criar empresa e abrir auditoria"}
+          {confirmando
+            ? "Salvando…"
+            : auditoriaAberta && !separar
+              ? "Somar à auditoria existente"
+              : "Criar empresa e abrir auditoria"}
         </button>
         <button type="button" className="btn-ghost" onClick={recomecar}>
           Descartar e recomeçar

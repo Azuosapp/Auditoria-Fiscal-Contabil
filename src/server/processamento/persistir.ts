@@ -109,17 +109,49 @@ function codigoModelo(modelo: string | undefined): string {
  * ou a destinatária. O parser chuta "SAIDA" quando não sabe; aqui, com o CNPJ da
  * empresa em mãos, o chute é corrigido. Sem isso, toda compra entraria como
  * receita.
+ *
+ * Mas ser a emitente NÃO basta para ser saída, e isso apareceu em arquivo real:
+ * na devolução de venda por cliente não contribuinte, é a própria empresa quem
+ * emite a nota — de ENTRADA, com CFOP 1201/2201. Contada como saída, a devolução
+ * viraria receita e infla o faturamento duas vezes (a venda original e a volta
+ * dela). O CFOP é quem diz a natureza da operação, então ele vem primeiro:
+ * primeiro dígito 1, 2 ou 3 é entrada; 5, 6 ou 7 é saída.
  */
 function direcaoReal(
   inv: ParsedInvoice,
   cnpjEmpresa: string | undefined,
 ): "ENTRADA" | "SAIDA" {
+  const porCfop = direcaoPeloCfop(inv);
+  if (porCfop) return porCfop;
+
   if (!cnpjEmpresa) return inv.direction;
   const emit = inv.emitCnpj?.replace(/\D/g, "");
   const dest = inv.destDoc?.replace(/\D/g, "");
   if (emit === cnpjEmpresa) return "SAIDA";
   if (dest === cnpjEmpresa) return "ENTRADA";
   return inv.direction;
+}
+
+/**
+ * Direção pelo CFOP predominante dos itens.
+ *
+ * Usa o CFOP da maioria dos itens em vez do primeiro: nota com itens de CFOP
+ * misturado existe, e decidir pelo item 1 seria arbitrário. Devolve `undefined`
+ * quando não há CFOP ou quando há empate — aí a decisão volta para o CNPJ.
+ */
+function direcaoPeloCfop(inv: ParsedInvoice): "ENTRADA" | "SAIDA" | undefined {
+  let entradas = 0;
+  let saidas = 0;
+
+  for (const item of inv.items) {
+    const d = item.cfop?.trim()[0];
+    if (d === "1" || d === "2" || d === "3") entradas += 1;
+    else if (d === "5" || d === "6" || d === "7") saidas += 1;
+  }
+
+  if (entradas === 0 && saidas === 0) return undefined;
+  if (entradas === saidas) return undefined;
+  return entradas > saidas ? "ENTRADA" : "SAIDA";
 }
 
 export async function persistirNotas(

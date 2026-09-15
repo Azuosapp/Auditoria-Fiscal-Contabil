@@ -23,6 +23,10 @@ const schema = z.object({
   competenciaIni: z.string().regex(/^\d{4}-\d{2}$/),
   competenciaFim: z.string().regex(/^\d{4}-\d{2}$/),
   titulo: z.string().optional(),
+  // Quando informado, os arquivos entram nesta auditoria. Sem ele, o sistema
+  // reaproveita a auditoria aberta da empresa.
+  auditoriaId: z.string().optional(),
+  criarNova: z.boolean().optional(),
   regimes: z
     .array(
       z.object({

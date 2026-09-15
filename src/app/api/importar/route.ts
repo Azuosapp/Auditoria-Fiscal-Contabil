@@ -104,5 +104,25 @@ export async function POST(req: Request) {
     data: { caminho },
   });
 
-  return NextResponse.json({ loteId: lote.id, analise });
+  // Se a empresa deduzida já tem auditoria aberta, a tela precisa saber para
+  // oferecer "somar à existente" em vez de criar outra em silêncio.
+  const cnpj = analise.identificacao.empresa?.cnpj;
+  const auditoriaAberta = cnpj
+    ? await prisma.auditoria.findFirst({
+        where: {
+          empresa: { cnpj },
+          status: { notIn: ["ENTREGUE", "ARQUIVADA"] },
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          titulo: true,
+          competenciaIni: true,
+          competenciaFim: true,
+          _count: { select: { documentos: true } },
+        },
+      })
+    : null;
+
+  return NextResponse.json({ loteId: lote.id, analise, auditoriaAberta });
 }

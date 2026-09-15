@@ -21,7 +21,18 @@ export interface Classificacao {
   seguro: boolean;
 }
 
-const AMOSTRA_BYTES = 8192;
+/**
+ * Amostra lida para classificar.
+ *
+ * Eram 8 KB, e não bastava: num SPED Fiscal real de uma indústria, o Bloco 0
+ * sozinho (participantes, itens, unidades) passa de 8 KB, e o primeiro registro
+ * de apuração só aparece bem depois. O arquivo era reconhecido como SPED, mas
+ * sem saber QUAL — e caía na classificação insegura.
+ *
+ * 256 KB cobre o Bloco 0 das empresas reais e ainda é barato: a leitura é de um
+ * prefixo do buffer que já está em memória.
+ */
+const AMOSTRA_BYTES = 256 * 1024;
 
 export function classificar(buffer: Buffer, nomeArquivo: string): Classificacao {
   if (ehZip(buffer)) {
@@ -129,27 +140,32 @@ function classificarSped(amostra: string): Classificacao | null {
     };
   }
 
-  if (/^\|(0110|M100|M105|M200|M500|M505|M600)\|/m.test(amostra)) {
+  // O 0110 abre a EFD-Contribuições logo no Bloco 0 e não existe na EFD
+  // ICMS/IPI — é o separador mais confiável entre as duas.
+  if (/^\|(0110|0111|M100|M105|M200|M500|M505|M600)\|/m.test(amostra)) {
     return {
       tipo: "SPED_CONTRIBUICOES",
-      motivo: "EFD-Contribuições — registros de apuração de PIS/COFINS",
+      motivo: "EFD-Contribuições — registro 0110 / apuração de PIS/COFINS",
       seguro: true,
     };
   }
 
-  if (/^\|(E100|E110|C190|C100)\|/m.test(amostra)) {
+  // Registros exclusivos da EFD ICMS/IPI. O 0005 e o 0150 aparecem no Bloco 0,
+  // muito antes do bloco de apuração — é o que permite reconhecer o arquivo sem
+  // depender de alcançar o Bloco E, que num SPED de indústria fica longe.
+  if (/^\|(0005|0150|0200|C100|C190|E100|E110|E116)\|/m.test(amostra)) {
     return {
       tipo: "SPED_FISCAL",
-      motivo: "EFD ICMS/IPI — registros de apuração do ICMS",
+      motivo: "EFD ICMS/IPI — registros do Bloco 0 e de apuração do ICMS",
       seguro: true,
     };
   }
 
-  // É SPED, mas a amostra não alcançou o bloco que o identifica. Assumir EFD
-  // ICMS/IPI aqui seria chute silencioso: marcar como não seguro.
+  // É SPED, mas nenhum registro conhecido apareceu. Assumir EFD ICMS/IPI seria
+  // chute silencioso: fica marcado como não seguro para o usuário conferir.
   return {
     tipo: "SPED_FISCAL",
-    motivo: "arquivo SPED sem bloco de apuração na amostra lida",
+    motivo: "arquivo SPED sem registro identificador na amostra lida",
     seguro: false,
   };
 }

@@ -214,6 +214,22 @@ const FAMILIA_B: DefinicaoAchado[] = [
       "receitas diferentes, com diferença de {valor}.",
   },
   {
+    codigo: "B10",
+    titulo: "Nota escriturada sem XML correspondente",
+    familia: "RECEITA",
+    severidade: "MEDIO",
+    tributo: "ICMS",
+    fontesNecessarias: ["NFE_XML", "SPED_FISCAL"],
+    descricao:
+      "O SPED Fiscal escriturou nota cuja chave de acesso não aparece entre os " +
+      "XMLs entregues. Ou o XML não foi entregue na coleta, ou foi escriturado " +
+      "documento que não existe.",
+    baseLegal: ["RCTE-GO, art. 308", "Ajuste SINIEF 07/2005"],
+    textoCliente:
+      "Em {competencia} há notas escrituradas cujo documento eletrônico não foi " +
+      "localizado, somando {valor}.",
+  },
+  {
     codigo: "B07",
     titulo: "Receita declarada no PGDAS menor que a receita real",
     familia: "RECEITA",
