@@ -43,6 +43,7 @@ interface Analise {
   resumoPorTipo: { tipo: string; quantidade: number }[];
   totalArquivos: number;
   totalBytes: number;
+  duplicadosNoEnvio: number;
   avisos: string[];
 }
 
@@ -302,7 +303,12 @@ export function PainelImportacao({
         <div className="kpi">
           <div className="kpi-label">Arquivos recebidos</div>
           <div className="kpi-val">{analise.totalArquivos}</div>
-          <div className="kpi-sub">{mb(analise.totalBytes)}</div>
+          <div className="kpi-sub">
+            {mb(analise.totalBytes)}
+            {analise.duplicadosNoEnvio > 0
+              ? ` · ${analise.duplicadosNoEnvio} repetido(s) ignorado(s)`
+              : ""}
+          </div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Período detectado</div>

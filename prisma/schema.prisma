@@ -189,6 +189,7 @@ model Lacuna {
 
   /// Código do achado ou família que não pôde ser avaliado.
   escopo          String
+  area            AreaAchado @default(FISCAL)
   documentoFaltante TipoDocumento
   competencia     String? @db.VarChar(7)
   descricao       String
@@ -264,6 +265,7 @@ model Documento {
   pendenciasFiscais PendenciaFiscal[]
   apuracoesSimples  ApuracaoSimples[]
   eventos           EventoNfe[]
+  retratoSituacao   RetratoSituacaoFiscal?
 
   @@unique([auditoriaId, hash])
   @@index([auditoriaId, tipo])
@@ -584,20 +586,70 @@ model Arrecadacao {
 }
 
 /// Relatório de Situação Fiscal do e-CAC — pendências em aberto.
+///
+/// É o que o Fisco já sabe e o cliente muitas vezes não. Fica em tabela própria,
+/// separado dos achados, porque não é conclusão nossa: é o registro do próprio
+/// órgão, e na apresentação vale exatamente por isso.
 model PendenciaFiscal {
   id          String    @id @default(cuid())
   documentoId String
   documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
 
-  competencia   String? @db.VarChar(7)
-  tributo       String? @db.VarChar(20)
-  descricao     String
-  /// DEBITO | OMISSAO_DECLARACAO | PARCELAMENTO | DIVIDA_ATIVA | MALHA
+  /// DEBITO | OMISSAO_DECLARACAO | PARCELAMENTO | DIVIDA_ATIVA |
+  /// IRREGULARIDADE_CADASTRAL | OUTRA
   natureza      String
-  valor         Decimal? @db.Decimal(18, 2)
+  /// RFB ou PGFN — o órgão que registra a pendência.
+  orgao         String  @db.VarChar(4)
+  descricao     String
+  /// Código e nome da receita, como impresso ("5952-07 - CSRF").
+  receita       String?
+  /// Período de apuração, como impresso. Nem sempre é competência AAAA-MM.
+  periodo       String?
+  vencimento    String?
+  valorOriginal   Decimal? @db.Decimal(18, 2)
+  saldoDevedor    Decimal? @db.Decimal(18, 2)
+  multa           Decimal? @db.Decimal(18, 2)
+  juros           Decimal? @db.Decimal(18, 2)
+  /// Principal + multa + juros. É este o número que vai para a apresentação.
+  saldoConsolidado Decimal? @db.Decimal(18, 2)
   situacao      String?
+  /// Inscrição em dívida ativa, processo ou conta de parcelamento.
+  identificacao String?
 
   @@index([documentoId])
+  @@index([natureza])
+}
+
+/// Retrato cadastral e de conformidade extraído do Relatório de Situação Fiscal.
+/// Um por documento importado — o relatório é uma fotografia de uma data.
+model RetratoSituacaoFiscal {
+  id          String    @id @default(cuid())
+  documentoId String    @unique
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  cnpj              String?
+  razaoSocial       String?
+  situacaoCadastral String?
+  motivoSituacao    String?
+  naturezaJuridica  String?
+  cnae              String?
+  porte             String?
+  dataAbertura      String?
+  municipio         String?
+  uf                String?
+  unidadeAdministrativa String?
+  responsavel       String?
+  emitidoEm         String?
+  certidaoNumero    String?
+  certidaoEmissao   String?
+  certidaoValidade  String?
+  /// O relatório afirma, com todas as letras, que não há pendência.
+  semPendencias     Boolean @default(false)
+  /// Sócios e administradores como o relatório os lista.
+  socios            Json?
+  avisos            Json?
+
+  criadoEm DateTime @default(now())
 }
 
 // =====================================================================
@@ -638,6 +690,13 @@ model CompetenciaConsolidada {
 // ACHADOS
 // =====================================================================
 
+/// Em que parte do relatório o achado aparece. Erro de apuração e de documento
+/// fiscal é uma conversa; pagamento, confissão e escrituração contábil é outra.
+enum AreaAchado {
+  FISCAL
+  CONTABIL
+}
+
 enum Severidade {
   CRITICO
   ALTO
@@ -667,6 +726,7 @@ model Achado {
   codigo    String @db.VarChar(6)
   titulo    String
   familia   String
+  area      AreaAchado @default(FISCAL)
   severidade Severidade
   confianca  Confianca @default(ALTA)
 
@@ -696,6 +756,7 @@ model Achado {
 
   evidencias Evidencia[]
 
+  @@index([auditoriaId, area, severidade])
   @@index([auditoriaId, severidade])
   @@index([auditoriaId, codigo])
   @@index([competencia])

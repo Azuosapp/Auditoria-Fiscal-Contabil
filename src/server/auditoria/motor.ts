@@ -1,6 +1,11 @@
-import { Prisma, type NivelAuditoria, type TipoDocumento } from "@prisma/client";
+import {
+  Prisma,
+  type NivelAuditoria,
+  type RegimeTributario,
+  type TipoDocumento,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { CATALOGO, cobertura, definicaoDe } from "./catalogo";
+import { CATALOGO, aplicavelAoRegime, cobertura, definicaoDe } from "./catalogo";
 import { avaliarPrescricao, exercicioDe } from "./prescricao";
 import { competenciasDoPeriodo, type AchadoProduzido, type ContextoRegra, type Regra } from "./tipos";
 import { familiaB } from "./regras/familia-b-receita";
@@ -31,7 +36,10 @@ export interface ResultadoAuditoria {
   lacunas: number;
   regrasAvaliadas: number;
   regrasBloqueadas: number;
+  /** Regras descartadas por não valerem no regime da empresa. */
+  regrasForaDoRegime: number;
   competenciasSemEscrituracao: string[];
+  porArea: Record<string, number>;
 }
 
 export async function auditar(auditoriaId: string): Promise<ResultadoAuditoria> {
@@ -42,6 +50,12 @@ export async function auditar(auditoriaId: string): Promise<ResultadoAuditoria> 
   if (!auditoria) throw new Error("Auditoria não encontrada.");
 
   const fontesDisponiveis = await fontesComDadoExtraido(auditoriaId);
+
+  // Os regimes em que a empresa esteve no período. Governam o que faz sentido
+  // procurar: uma indústria do Lucro Real não tem sublimite do Simples.
+  const regimes = new Set<RegimeTributario>(
+    auditoria.empresa.regimes.map((r) => r.regime),
+  );
 
   const ctx: ContextoRegra = {
     auditoriaId,
@@ -67,9 +81,12 @@ export async function auditar(auditoriaId: string): Promise<ResultadoAuditoria> 
     produzidos.push(...(await regra.executar(ctx)));
   }
 
-  await gravarAchados(auditoriaId, produzidos);
+  await gravarAchados(auditoriaId, produzidos, regimes);
 
-  const { avaliaveis, bloqueados } = cobertura(fontesDisponiveis);
+  const { avaliaveis, bloqueados, foraDoRegime } = cobertura(
+    fontesDisponiveis,
+    regimes,
+  );
   const competenciasSemEscrituracao = await gravarLacunas(
     auditoriaId,
     bloqueados,
@@ -97,11 +114,19 @@ export async function auditar(auditoriaId: string): Promise<ResultadoAuditoria> 
     _count: { _all: true },
   });
 
+  const porArea = await prisma.achado.groupBy({
+    by: ["area"],
+    where: { auditoriaId },
+    _count: { _all: true },
+  });
+
   return {
     achados: produzidos.length,
     porSeveridade: Object.fromEntries(
       porSeveridade.map((s) => [s.severidade, s._count._all]),
     ),
+    porArea: Object.fromEntries(porArea.map((a) => [a.area, a._count._all])),
+    regrasForaDoRegime: foraDoRegime.length,
     totalDebitoAberto: totais.debitoAberto.toFixed(2),
     totalRiscoAutuacao: totais.riscoAutuacao.toFixed(2),
     totalRecuperavel: totais.recuperavel.toFixed(2),
@@ -164,9 +189,16 @@ async function fontesComDadoExtraido(
 async function gravarAchados(
   auditoriaId: string,
   produzidos: AchadoProduzido[],
+  regimes: Set<RegimeTributario>,
 ): Promise<void> {
   for (const p of produzidos) {
     const definicao = definicaoDe(p.codigo);
+
+    // Regra que não vale no regime da empresa não vira achado, mesmo que o dado
+    // exista. É a última trava: a regra já devia ter se abstido, mas o achado
+    // errado numa apresentação custa mais que a verificação redundante.
+    if (!aplicavelAoRegime(definicao, regimes)) continue;
+
     const competencia = p.competencia;
 
     const prescricao = competencia
@@ -179,6 +211,7 @@ async function gravarAchados(
         codigo: p.codigo,
         titulo: definicao.titulo,
         familia: definicao.familia,
+        area: definicao.area,
         severidade: p.severidade ?? definicao.severidade,
         confianca: p.confianca ?? "ALTA",
         tributo: definicao.tributo,
@@ -227,6 +260,7 @@ async function gravarLacunas(
       data: {
         auditoriaId,
         escopo: `${b.definicao.codigo} — ${b.definicao.titulo}`,
+        area: b.definicao.area,
         documentoFaltante: b.faltando[0],
         descricao:
           `Não avaliado por falta de: ${b.faltando.join(", ")}. ` +
@@ -258,6 +292,7 @@ async function gravarLacunas(
         data: {
           auditoriaId,
           escopo: `Competência ${mesAno(c)} sem escrituração fiscal`,
+          area: "FISCAL",
           documentoFaltante: "SPED_FISCAL",
           competencia: c,
           descricao:

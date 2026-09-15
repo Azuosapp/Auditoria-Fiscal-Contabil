@@ -1,5 +1,4 @@
-import type { Severidade } from "@prisma/client";
-import type { TipoDocumento } from "@prisma/client";
+import type { RegimeTributario, Severidade, TipoDocumento } from "@prisma/client";
 
 /**
  * Catálogo de achados — a definição declarativa de tudo que a auditoria procura.
@@ -24,10 +23,30 @@ export type FamiliaAchado =
   | "CONTABIL"
   | "ACESSORIA";
 
+/**
+ * Onde o achado é apresentado.
+ *
+ * FISCAL é erro de apuração e de documento fiscal — o que a empresa declarou,
+ * escriturou e emitiu. CONTABIL é o que envolve pagamento, confissão e
+ * escrituração contábil: se o tributo foi recolhido, o que a DCTF confessou, o
+ * que a ECD registra. São conversas diferentes com o cliente e não se misturam
+ * na mesma tela.
+ */
+export type AreaAchado = "FISCAL" | "CONTABIL";
+
 export interface DefinicaoAchado {
   codigo: string;
   titulo: string;
   familia: FamiliaAchado;
+  area: AreaAchado;
+  /**
+   * Regimes em que o achado faz sentido. Ausente = vale para todos.
+   *
+   * Sem isto, uma indústria do Lucro Real veria "sublimite do Simples
+   * ultrapassado" na lista do que não foi avaliado — ruído que faz o relatório
+   * parecer genérico.
+   */
+  regimesAplicaveis?: RegimeTributario[];
   severidade: Severidade;
   /** Tributo afetado; `null` quando o achado é transversal. */
   tributo: string | null;
@@ -53,6 +72,7 @@ export interface DefinicaoAchado {
 const FAMILIA_A: DefinicaoAchado[] = [
   {
     codigo: "A01",
+    area: "CONTABIL",
     titulo: "ICMS declarado no SPED Fiscal e não recolhido",
     familia: "DIVERGENCIA_PAGAMENTO",
     severidade: "CRITICO",
@@ -66,6 +86,8 @@ const FAMILIA_A: DefinicaoAchado[] = [
   },
   {
     codigo: "A02",
+    area: "CONTABIL",
+    regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
     titulo: "PIS declarado na EFD-Contribuições e não recolhido",
     familia: "DIVERGENCIA_PAGAMENTO",
     severidade: "CRITICO",
@@ -79,6 +101,8 @@ const FAMILIA_A: DefinicaoAchado[] = [
   },
   {
     codigo: "A03",
+    area: "CONTABIL",
+    regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
     titulo: "COFINS declarada na EFD-Contribuições e não recolhida",
     familia: "DIVERGENCIA_PAGAMENTO",
     severidade: "CRITICO",
@@ -92,6 +116,8 @@ const FAMILIA_A: DefinicaoAchado[] = [
   },
   {
     codigo: "A04",
+    area: "CONTABIL",
+    regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
     titulo: "IRPJ/CSLL apurado na ECF e não confessado em DCTF",
     familia: "DIVERGENCIA_PAGAMENTO",
     severidade: "CRITICO",
@@ -105,6 +131,7 @@ const FAMILIA_A: DefinicaoAchado[] = [
   },
   {
     codigo: "A05",
+    area: "CONTABIL",
     titulo: "Tributo federal confessado e não pago",
     familia: "DIVERGENCIA_PAGAMENTO",
     severidade: "CRITICO",
@@ -119,6 +146,8 @@ const FAMILIA_A: DefinicaoAchado[] = [
   },
   {
     codigo: "A06",
+    area: "CONTABIL",
+    regimesAplicaveis: ["SIMPLES_NACIONAL"],
     titulo: "DAS do Simples declarado e não pago",
     familia: "DIVERGENCIA_PAGAMENTO",
     severidade: "CRITICO",
@@ -131,6 +160,7 @@ const FAMILIA_A: DefinicaoAchado[] = [
   },
   {
     codigo: "A07",
+    area: "CONTABIL",
     titulo: "Contribuição previdenciária confessada e não paga",
     familia: "DIVERGENCIA_PAGAMENTO",
     severidade: "CRITICO",
@@ -144,6 +174,7 @@ const FAMILIA_A: DefinicaoAchado[] = [
   },
   {
     codigo: "A08",
+    area: "CONTABIL",
     titulo: "Débito em aberto que o cliente desconhece",
     familia: "DIVERGENCIA_PAGAMENTO",
     severidade: "CRITICO",
@@ -161,6 +192,7 @@ const FAMILIA_A: DefinicaoAchado[] = [
 const FAMILIA_B: DefinicaoAchado[] = [
   {
     codigo: "B01",
+    area: "FISCAL",
     titulo: "NF-e autorizada e não escriturada",
     familia: "RECEITA",
     severidade: "CRITICO",
@@ -174,6 +206,7 @@ const FAMILIA_B: DefinicaoAchado[] = [
   },
   {
     codigo: "B02",
+    area: "FISCAL",
     titulo: "NF-e escriturada com valor divergente do XML",
     familia: "RECEITA",
     severidade: "ALTO",
@@ -186,6 +219,7 @@ const FAMILIA_B: DefinicaoAchado[] = [
   },
   {
     codigo: "B03",
+    area: "FISCAL",
     titulo: "NF-e cancelada escriturada como válida",
     familia: "RECEITA",
     severidade: "ALTO",
@@ -199,6 +233,8 @@ const FAMILIA_B: DefinicaoAchado[] = [
   },
   {
     codigo: "B05",
+    area: "FISCAL",
+    regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
     titulo: "Receita divergente entre as escriturações do mesmo período",
     familia: "RECEITA",
     severidade: "ALTO",
@@ -215,6 +251,7 @@ const FAMILIA_B: DefinicaoAchado[] = [
   },
   {
     codigo: "B10",
+    area: "FISCAL",
     titulo: "Nota escriturada sem XML correspondente",
     familia: "RECEITA",
     severidade: "MEDIO",
@@ -231,6 +268,8 @@ const FAMILIA_B: DefinicaoAchado[] = [
   },
   {
     codigo: "B07",
+    area: "FISCAL",
+    regimesAplicaveis: ["SIMPLES_NACIONAL"],
     titulo: "Receita declarada no PGDAS menor que a receita real",
     familia: "RECEITA",
     severidade: "CRITICO",
@@ -244,6 +283,8 @@ const FAMILIA_B: DefinicaoAchado[] = [
   },
   {
     codigo: "B09",
+    area: "CONTABIL",
+    regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
     titulo: "Receita divergente entre ECD e ECF",
     familia: "RECEITA",
     severidade: "ALTO",
@@ -261,6 +302,8 @@ const FAMILIA_B: DefinicaoAchado[] = [
 const FAMILIA_C: DefinicaoAchado[] = [
   {
     codigo: "C01",
+    area: "FISCAL",
+    regimesAplicaveis: ["LUCRO_REAL"],
     titulo: "Crédito de PIS/COFINS sobre item monofásico",
     familia: "CREDITO",
     severidade: "ALTO",
@@ -274,6 +317,8 @@ const FAMILIA_C: DefinicaoAchado[] = [
   },
   {
     codigo: "C03",
+    area: "FISCAL",
+    regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
     titulo: "ICMS não excluído da base de PIS/COFINS",
     familia: "CREDITO",
     severidade: "OPORTUNIDADE",
@@ -287,6 +332,7 @@ const FAMILIA_C: DefinicaoAchado[] = [
   },
   {
     codigo: "C04",
+    area: "FISCAL",
     titulo: "Crédito de ICMS de energia, frete e ativo não aproveitado",
     familia: "CREDITO",
     severidade: "OPORTUNIDADE",
@@ -304,6 +350,8 @@ const FAMILIA_C: DefinicaoAchado[] = [
 const FAMILIA_D: DefinicaoAchado[] = [
   {
     codigo: "D01",
+    area: "FISCAL",
+    regimesAplicaveis: ["SIMPLES_NACIONAL"],
     titulo: "Sublimite do Simples ultrapassado sem segregar ICMS e ISS",
     familia: "REGIME",
     severidade: "CRITICO",
@@ -317,6 +365,8 @@ const FAMILIA_D: DefinicaoAchado[] = [
   },
   {
     codigo: "D02",
+    area: "FISCAL",
+    regimesAplicaveis: ["SIMPLES_NACIONAL"],
     titulo: "Anexo do Simples ou fator R aplicado incorretamente",
     familia: "REGIME",
     severidade: "ALTO",
@@ -331,6 +381,7 @@ const FAMILIA_D: DefinicaoAchado[] = [
   },
   {
     codigo: "D04",
+    area: "FISCAL",
     titulo: "Regime tributário mais caro que a alternativa disponível",
     familia: "REGIME",
     severidade: "OPORTUNIDADE",
@@ -349,6 +400,7 @@ const FAMILIA_D: DefinicaoAchado[] = [
 const FAMILIA_E: DefinicaoAchado[] = [
   {
     codigo: "E02",
+    area: "FISCAL",
     titulo: "DIFAL não recolhido em venda interestadual",
     familia: "ICMS_OPERACIONAL",
     severidade: "ALTO",
@@ -363,6 +415,7 @@ const FAMILIA_E: DefinicaoAchado[] = [
   },
   {
     codigo: "E05",
+    area: "FISCAL",
     titulo: "CFOP incompatível com o destino da operação",
     familia: "ICMS_OPERACIONAL",
     severidade: "MEDIO",
@@ -379,6 +432,7 @@ const FAMILIA_E: DefinicaoAchado[] = [
   },
   {
     codigo: "E06",
+    area: "FISCAL",
     titulo: "PROTEGE recolhido a 15% em vez de 10%, 8% ou 6%",
     familia: "ICMS_OPERACIONAL",
     severidade: "OPORTUNIDADE",
@@ -396,6 +450,7 @@ const FAMILIA_E: DefinicaoAchado[] = [
 const FAMILIA_F: DefinicaoAchado[] = [
   {
     codigo: "F01",
+    area: "CONTABIL",
     titulo: "Caixa com saldo credor (caixa negativo)",
     familia: "CONTABIL",
     severidade: "CRITICO",
@@ -409,6 +464,7 @@ const FAMILIA_F: DefinicaoAchado[] = [
   },
   {
     codigo: "F02",
+    area: "CONTABIL",
     titulo: "Passivo fictício — empréstimo de sócio sem lastro",
     familia: "CONTABIL",
     severidade: "CRITICO",
@@ -422,6 +478,7 @@ const FAMILIA_F: DefinicaoAchado[] = [
   },
   {
     codigo: "F03",
+    area: "CONTABIL",
     titulo: "Balancete que não fecha",
     familia: "CONTABIL",
     severidade: "ALTO",
@@ -434,6 +491,8 @@ const FAMILIA_F: DefinicaoAchado[] = [
   },
   {
     codigo: "F05",
+    area: "CONTABIL",
+    regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
     titulo: "Distribuição de lucro acima do presumido sem escrituração contábil",
     familia: "CONTABIL",
     severidade: "CRITICO",
@@ -447,6 +506,7 @@ const FAMILIA_F: DefinicaoAchado[] = [
   },
   {
     codigo: "F09",
+    area: "CONTABIL",
     titulo: "Contabilidade sem lastro — lançamentos globais mensais",
     familia: "CONTABIL",
     severidade: "ALTO",
@@ -464,6 +524,7 @@ const FAMILIA_F: DefinicaoAchado[] = [
 const FAMILIA_G: DefinicaoAchado[] = [
   {
     codigo: "G02",
+    area: "CONTABIL",
     titulo: "Obrigação acessória não entregue em exercício obrigatório",
     familia: "ACESSORIA",
     severidade: "ALTO",
@@ -477,6 +538,8 @@ const FAMILIA_G: DefinicaoAchado[] = [
   },
   {
     codigo: "G04",
+    area: "FISCAL",
+    regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
     titulo: "Documento fiscal sem os campos de IBS e CBS",
     familia: "ACESSORIA",
     severidade: "ALTO",
@@ -510,21 +573,49 @@ export function definicaoDe(codigo: string): DefinicaoAchado {
 }
 
 /**
+ * O achado se aplica a algum dos regimes em que a empresa esteve no período?
+ *
+ * Regime desconhecido deixa tudo passar: é melhor listar a mais do que esconder
+ * achado por uma suposição nossa sobre o enquadramento.
+ */
+export function aplicavelAoRegime(
+  d: DefinicaoAchado,
+  regimes: Set<RegimeTributario>,
+): boolean {
+  if (!d.regimesAplicaveis) return true;
+  if (regimes.size === 0) return true;
+  return d.regimesAplicaveis.some((r) => regimes.has(r));
+}
+
+/**
  * Quais achados são avaliáveis com os documentos que o cliente entregou, e quais
  * viram lacuna declarada no relatório.
+ *
+ * O que não se aplica ao regime da empresa não entra em nenhum dos dois lados:
+ * uma indústria do Lucro Real não tem "sublimite do Simples" nem como achado nem
+ * como lacuna — a regra simplesmente não existe para ela.
  */
-export function cobertura(fontesDisponiveis: Set<TipoDocumento>): {
+export function cobertura(
+  fontesDisponiveis: Set<TipoDocumento>,
+  regimes: Set<RegimeTributario> = new Set(),
+): {
   avaliaveis: DefinicaoAchado[];
   bloqueados: { definicao: DefinicaoAchado; faltando: TipoDocumento[] }[];
+  foraDoRegime: DefinicaoAchado[];
 } {
   const avaliaveis: DefinicaoAchado[] = [];
   const bloqueados: { definicao: DefinicaoAchado; faltando: TipoDocumento[] }[] = [];
+  const foraDoRegime: DefinicaoAchado[] = [];
 
   for (const d of CATALOGO) {
+    if (!aplicavelAoRegime(d, regimes)) {
+      foraDoRegime.push(d);
+      continue;
+    }
     const faltando = d.fontesNecessarias.filter((f) => !fontesDisponiveis.has(f));
     if (faltando.length === 0) avaliaveis.push(d);
     else bloqueados.push({ definicao: d, faltando });
   }
 
-  return { avaliaveis, bloqueados };
+  return { avaliaveis, bloqueados, foraDoRegime };
 }

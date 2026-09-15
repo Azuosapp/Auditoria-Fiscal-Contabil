@@ -9,6 +9,7 @@ import {
   type ExtractionResultSpedContribuicoes,
 } from "@/server/extraction/sped-contribuicoes";
 import { parseExtratoPgdas, ehExtratoPgdas } from "@/server/extraction/pgdas-extrato";
+import { parseSituacaoFiscal } from "@/server/extraction/situacao-fiscal";
 import { pdfBufferParaTexto } from "@/server/extraction/pdf-texto";
 import { decodeTextBuffer } from "@/server/extraction/encoding";
 import { ehZip } from "@/server/extraction/zip";
@@ -21,6 +22,7 @@ import {
   persistirEventos,
   persistirNotas,
   persistirPgdas,
+  persistirSituacaoFiscal,
   reconciliar,
   somarContagens,
   totalDe,
@@ -50,7 +52,6 @@ const SEM_PARSER: Partial<Record<TipoDocumento, string>> = {
   ECF: "Parser de ECF ainda não implementado.",
   DCTF: "Parser de DCTF ainda não implementado.",
   DCTFWEB: "Parser de DCTFWeb ainda não implementado.",
-  SITUACAO_FISCAL: "Parser do relatório de situação fiscal ainda não implementado.",
   COMPROVANTE_ARRECADACAO:
     "Parser de comprovante de arrecadação (DARF/DAS/DARE) ainda não implementado.",
   ESOCIAL: "Parser de eSocial ainda não implementado.",
@@ -216,6 +217,7 @@ async function processarDocumento(
         apuracoesContribuicoes: contagem.apuracoesContribuicoes,
         apuracoesSimples: contagem.apuracoesSimples,
         eventos: contagem.eventos,
+        pendenciasFiscais: contagem.pendenciasFiscais,
       },
     },
   });
@@ -236,6 +238,8 @@ async function limparExtracaoAnterior(documentoId: string) {
     prisma.apuracaoFiscal.deleteMany({ where: { documentoId } }),
     prisma.apuracaoContribuicoes.deleteMany({ where: { documentoId } }),
     prisma.apuracaoSimples.deleteMany({ where: { documentoId } }),
+    prisma.pendenciaFiscal.deleteMany({ where: { documentoId } }),
+    prisma.retratoSituacaoFiscal.deleteMany({ where: { documentoId } }),
   ]);
 }
 
@@ -299,6 +303,33 @@ async function processarUnico(
         uf,
       );
       return { parser: "sped-contribuicoes", contagem, avisos: r.warnings };
+    }
+
+    case "SITUACAO_FISCAL": {
+      // O relatório é sempre PDF, mas aceita texto para quem salvou a página.
+      const texto =
+        buffer.subarray(0, 5).toString("latin1") === "%PDF-"
+          ? await pdfBufferParaTexto(buffer)
+          : decodeTextBuffer(buffer).text;
+
+      const extraida = parseSituacaoFiscal(texto);
+      if (!extraida) {
+        return {
+          parser: "situacao-fiscal",
+          contagem: contagemVazia(),
+          avisos: ["O arquivo não tem a estrutura do Relatório de Situação Fiscal."],
+        };
+      }
+
+      const contagem = contagemVazia();
+      contagem.pendenciasFiscais = await prisma.$transaction((tx) =>
+        persistirSituacaoFiscal(tx, documentoId, extraida),
+      );
+      // O retrato conta como registro extraído mesmo sem pendência: é ele que
+      // prova que o relatório foi lido, e "empresa sem pendência" é resultado.
+      if (contagem.pendenciasFiscais === 0) contagem.pendenciasFiscais = 1;
+
+      return { parser: "situacao-fiscal", contagem, avisos: extraida.avisos };
     }
 
     case "PGDAS": {

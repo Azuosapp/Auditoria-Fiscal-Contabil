@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { BotaoProcessar } from "@/components/BotaoProcessar";
+import { AbasAuditoria } from "@/components/AbasAuditoria";
+import { RegimePorExercicio } from "@/components/RegimePorExercicio";
+import { LimparDados } from "@/components/LimparDados";
 import { cnpj as fmtCnpj, competencia as fmtComp, moeda } from "@/lib/formato";
 
 export const dynamic = "force-dynamic";
@@ -114,6 +117,26 @@ export default async function AuditoriaPage({
     }),
   ]);
 
+  const contagensArea = await prisma.achado.groupBy({
+    by: ["area"],
+    where: { auditoriaId: auditoria.id },
+    _count: { _all: true },
+  });
+  // Exercícios cobertos pelo período — é para eles que o regime é pedido.
+  const anoIni = Number(auditoria.competenciaIni.slice(0, 4));
+  const anoFim = Number(auditoria.competenciaFim.slice(0, 4));
+  const exercicios = Array.from(
+    { length: Math.max(0, anoFim - anoIni) + 1 },
+    (_, i) => anoIni + i,
+  );
+
+  const achadosPorArea = Object.fromEntries(
+    contagensArea.map((c) => [
+      c.area === "FISCAL" ? "/fiscal" : "/contabil",
+      c._count._all,
+    ]),
+  );
+
   const pendentes =
     porStatus.find((s) => s.status === "PENDENTE")?._count._all ?? 0;
   const totalNotas = totaisNotas.reduce((s, t) => s + t._count._all, 0);
@@ -131,18 +154,12 @@ export default async function AuditoriaPage({
             {fmtComp(auditoria.competenciaIni)} a {fmtComp(auditoria.competenciaFim)}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Link href={`/auditorias/${auditoria.id}/achados`} className="btn-primary">
-            Ver achados ({auditoria._count.achados})
-          </Link>
-          <Link
-            href={`/importar?auditoria=${auditoria.id}`}
-            className="btn-ghost"
-          >
-            Importar mais arquivos
-          </Link>
-        </div>
+        <Link href={`/importar?auditoria=${auditoria.id}`} className="btn-ghost">
+          Importar mais arquivos
+        </Link>
       </div>
+
+      <AbasAuditoria auditoriaId={auditoria.id} contagens={achadosPorArea} />
 
       <div className="kpis">
         <div className="kpi">
@@ -223,24 +240,19 @@ export default async function AuditoriaPage({
         </div>
 
         <div className="card">
-          <div className="mb-2 text-[11px] font-bold">Regime por exercício</div>
-          {auditoria.empresa.regimes.length === 0 ? (
-            <p className="text-[10px] text-content-muted">
-              Regime não informado. É ele que define qual motor de regras se
-              aplica a cada ano.
-            </p>
-          ) : (
-            <table className="tbl">
-              <tbody>
-                {auditoria.empresa.regimes.map((r) => (
-                  <tr key={r.id}>
-                    <td className="w-14 font-mono font-semibold">{r.exercicio}</td>
-                    <td>{ROTULO_REGIME[r.regime] ?? r.regime}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <div className="mb-1 text-[11px] font-bold">Regime por exercício</div>
+          <p className="mb-2 text-[10px] text-content-muted">
+            Define quais regras fazem sentido procurar em cada ano.
+          </p>
+          <RegimePorExercicio
+            empresaId={auditoria.empresaId}
+            exercicios={exercicios}
+            atuais={auditoria.empresa.regimes.map((r) => ({
+              exercicio: r.exercicio,
+              regime: r.regime,
+              origem: r.origem,
+            }))}
+          />
         </div>
       </div>
 
@@ -390,6 +402,11 @@ export default async function AuditoriaPage({
           </div>
         </div>
       ) : null}
+
+      <div className="card mb-3">
+        <div className="mb-1 text-[11px] font-bold">Limpar dados</div>
+        <LimparDados auditoriaId={auditoria.id} />
+      </div>
 
       <div className="card">
         <div className="text-[11px] font-bold">Próxima etapa</div>

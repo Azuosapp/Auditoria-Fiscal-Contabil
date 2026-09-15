@@ -1,9 +1,13 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { cnpj as fmtCnpj, competencia as fmtComp, moeda } from "@/lib/formato";
+import type { Achado, Evidencia, Lacuna } from "@prisma/client";
+import { competencia as fmtComp, moeda } from "@/lib/formato";
 
-export const dynamic = "force-dynamic";
+/**
+ * Lista de achados de uma área, com a declaração do que não foi analisado.
+ *
+ * Usada nas abas Fiscal e Contábil. A lacuna vem junto de propósito: separar
+ * "o que achei" de "o que não pude olhar" em telas diferentes faria o leitor
+ * tomar a primeira lista como completa.
+ */
 
 const ORDEM_SEVERIDADE = ["CRITICO", "ALTO", "MEDIO", "BAIXO", "OPORTUNIDADE"];
 
@@ -27,81 +31,31 @@ const ROTULO_CONFIANCA: Record<string, string> = {
   BAIXA: "baixa",
 };
 
-const ROTULO_NIVEL: Record<string, string> = {
-  DIAGNOSTICO_RAPIDO: "Diagnóstico rápido",
-  FISCAL: "Auditoria fiscal",
-  COMPLETA: "Auditoria completa",
-};
+type AchadoComEvidencias = Achado & { evidencias: Evidencia[] };
 
-export default async function AchadosPage({
-  params,
+export function ListaAchados({
+  achados,
+  lacunas,
+  vazio,
 }: {
-  params: { id: string };
+  achados: AchadoComEvidencias[];
+  lacunas: Lacuna[];
+  /** Texto exibido quando a área não produziu achado. */
+  vazio: string;
 }) {
-  const auditoria = await prisma.auditoria.findUnique({
-    where: { id: params.id },
-    include: {
-      empresa: true,
-      achados: {
-        include: { evidencias: true },
-        orderBy: [{ competencia: "asc" }, { codigo: "asc" }],
-      },
-      lacunas: { orderBy: { escopo: "asc" } },
-    },
-  });
-
-  if (!auditoria) notFound();
-
-  const achados = [...auditoria.achados].sort(
+  const ordenados = [...achados].sort(
     (a, b) =>
       ORDEM_SEVERIDADE.indexOf(a.severidade) -
         ORDEM_SEVERIDADE.indexOf(b.severidade) ||
       (a.competencia ?? "").localeCompare(b.competencia ?? ""),
   );
 
-  const exigiveis = achados.filter((a) => a.situacaoPrescricional !== "DECAIDO");
-  const decaidos = achados.filter((a) => a.situacaoPrescricional === "DECAIDO");
-  const aDecair = achados.filter((a) => a.situacaoPrescricional === "A_DECAIR");
+  const exigiveis = ordenados.filter((a) => a.situacaoPrescricional !== "DECAIDO");
+  const decaidos = ordenados.filter((a) => a.situacaoPrescricional === "DECAIDO");
+  const aDecair = ordenados.filter((a) => a.situacaoPrescricional === "A_DECAIR");
 
   return (
     <>
-      <div className="mb-4 flex items-end justify-between">
-        <div>
-          <h1 className="text-[15px] font-bold">
-            Achados · {auditoria.empresa.razaoSocial}
-          </h1>
-          <p className="mt-0.5 text-[11px] text-content-muted">
-            <span className="font-mono">{fmtCnpj(auditoria.empresa.cnpj)}</span> ·{" "}
-            {fmtComp(auditoria.competenciaIni)} a {fmtComp(auditoria.competenciaFim)}
-            {auditoria.nivelAlcancado
-              ? ` · ${ROTULO_NIVEL[auditoria.nivelAlcancado]}`
-              : ""}
-          </p>
-        </div>
-        <Link href={`/auditorias/${auditoria.id}`} className="btn-ghost">
-          Voltar à auditoria
-        </Link>
-      </div>
-
-      {/* Página 1 do relatório: os três números que ganham a reunião. */}
-      <div className="mb-4 grid gap-3 md:grid-cols-3">
-        <div className="kpi" style={{ borderLeftColor: "var(--danger)" }}>
-          <div className="kpi-label">Débito em aberto</div>
-          <div className="kpi-val">{moeda(auditoria.totalDebitoAberto)}</div>
-          <div className="kpi-sub">já declarado e não pago</div>
-        </div>
-        <div className="kpi" style={{ borderLeftColor: "var(--warning)" }}>
-          <div className="kpi-label">Risco de autuação</div>
-          <div className="kpi-val">{moeda(auditoria.totalRiscoAutuacao)}</div>
-          <div className="kpi-sub">exposição a lançamento de ofício</div>
-        </div>
-        <div className="kpi" style={{ borderLeftColor: "var(--success)" }}>
-          <div className="kpi-label">A recuperar</div>
-          <div className="kpi-val">{moeda(auditoria.totalRecuperavel)}</div>
-          <div className="kpi-sub">pago a maior ou crédito não aproveitado</div>
-        </div>
-      </div>
-
       {aDecair.length > 0 ? (
         <div
           className="mb-3 rounded-md px-3 py-2 text-[11px]"
@@ -109,18 +63,15 @@ export default async function AchadosPage({
         >
           <strong>{aDecair.length} achado(s) decaem em menos de 12 meses.</strong>{" "}
           Passada a janela, a Receita não pode mais constituir o crédito — e a
-          oportunidade de regularizar com denúncia espontânea também se fecha.
+          chance de regularizar com denúncia espontânea também se fecha.
         </div>
       ) : null}
 
-      {achados.length === 0 ? (
+      {exigiveis.length === 0 ? (
         <div className="card py-10 text-center">
-          <div className="text-[13px] font-semibold">Nenhum achado</div>
+          <div className="text-[13px] font-semibold">Nenhum achado nesta área</div>
           <p className="mx-auto mt-1 max-w-lg text-[11px] text-content-muted">
-            Com os documentos importados até aqui, as regras aplicáveis não
-            encontraram inconsistência. Isso não significa que a empresa esteja
-            regular: veja abaixo o que não pôde ser avaliado por falta de
-            documento.
+            {vazio}
           </p>
         </div>
       ) : (
@@ -233,21 +184,18 @@ export default async function AchadosPage({
         </section>
       ) : null}
 
-      {/* O que NÃO foi analisado. Auditoria que esconde a própria lacuna não
-          serve como peça técnica. */}
       <section className="mt-4">
         <h2 className="mb-1 text-[11px] font-bold uppercase tracking-[0.5px] text-content-muted">
           O que não foi analisado, e por quê
         </h2>
         <p className="mb-2 text-[10px] text-content-muted">
-          Esta auditoria foi feita com os documentos entregues. Os itens abaixo
-          não puderam ser avaliados — não significa que estejam corretos.
+          Os itens abaixo não puderam ser avaliados com os documentos entregues.
+          Não significa que estejam corretos.
         </p>
 
-        {auditoria.lacunas.length === 0 ? (
+        {lacunas.length === 0 ? (
           <div className="card text-[10px] text-content-muted">
-            Todas as regras do catálogo puderam ser avaliadas com os documentos
-            importados.
+            Todas as regras desta área puderam ser avaliadas.
           </div>
         ) : (
           <div className="tbl-wrap">
@@ -260,7 +208,7 @@ export default async function AchadosPage({
                 </tr>
               </thead>
               <tbody>
-                {auditoria.lacunas.map((l) => (
+                {lacunas.map((l) => (
                   <tr key={l.id}>
                     <td>
                       <div className="font-medium">{l.escopo}</div>

@@ -55,6 +55,8 @@ export interface AnaliseLote {
   resumoPorTipo: ResumoTipo[];
   totalArquivos: number;
   totalBytes: number;
+  /** Arquivos idênticos dentro do próprio envio, já descartados. */
+  duplicadosNoEnvio: number;
   avisos: string[];
 }
 
@@ -72,8 +74,21 @@ export async function analisarLote(
   const conta = (t: TipoDocumento, n = 1) =>
     contagem.set(t, (contagem.get(t) ?? 0) + n);
 
+  // O mesmo arquivo costuma vir duas vezes no mesmo envio: a pasta de janeiro e
+  // a de "tudo", o zip e o arquivo solto. Descartar pelo CONTEÚDO evita ler e
+  // contar duas vezes — nome diferente não faz o arquivo ser outro.
+  const hashesVistos = new Set<string>();
+  let duplicadosNoEnvio = 0;
+
   for (const recebido of recebidos) {
     const hash = createHash("sha256").update(recebido.buffer).digest("hex");
+
+    if (hashesVistos.has(hash)) {
+      duplicadosNoEnvio += 1;
+      continue;
+    }
+    hashesVistos.add(hash);
+
     const classificacao = classificar(recebido.buffer, recebido.nome);
 
     // Pacote: o conteúdo é que manda. É assim que o arquivo fiscal chega —
@@ -119,12 +134,20 @@ export async function analisarLote(
     .map(([tipo, quantidade]) => ({ tipo, quantidade }))
     .sort((a, b) => b.quantidade - a.quantidade);
 
+  if (duplicadosNoEnvio > 0) {
+    avisos.push(
+      `${duplicadosNoEnvio} arquivo(s) idêntico(s) no próprio envio foram ` +
+        `ignorados (mesmo conteúdo, ainda que com nome diferente).`,
+    );
+  }
+
   return {
     identificacao,
     arquivos,
     resumoPorTipo,
     totalArquivos: arquivos.length,
-    totalBytes: recebidos.reduce((s, r) => s + r.buffer.length, 0),
+    totalBytes: arquivos.reduce((s, a) => s + a.tamanhoBytes, 0),
+    duplicadosNoEnvio,
     avisos,
   };
 }

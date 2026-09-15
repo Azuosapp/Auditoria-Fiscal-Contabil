@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { cnpj as fmtCnpj } from "@/lib/formato";
+import { ExcluirEmpresa } from "@/components/ExcluirEmpresa";
 
 export const metadata = { title: "Empresas · Auditoria Azuos" };
 export const dynamic = "force-dynamic";
@@ -41,6 +42,7 @@ export default async function EmpresasPage() {
                 <th className="w-24">CNAE</th>
                 <th className="w-44">Regimes</th>
                 <th className="w-20">Auditorias</th>
+                <th className="w-24"></th>
               </tr>
             </thead>
             <tbody>
@@ -58,6 +60,14 @@ export default async function EmpresasPage() {
                           .join(" · ")}
                   </td>
                   <td className="num">{e._count.auditorias}</td>
+                  <td>
+                    <ExcluirEmpresa
+                      empresaId={e.id}
+                      cnpj={e.cnpj}
+                      razaoSocial={e.razaoSocial}
+                      auditorias={e._count.auditorias}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>

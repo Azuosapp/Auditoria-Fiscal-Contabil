@@ -7,6 +7,7 @@ import type {
 } from "@/server/extraction/types";
 import type { ExtractionResultSpedContribuicoes } from "@/server/extraction/sped-contribuicoes";
 import type { ExtratoPgdas } from "@/server/extraction/pgdas-extrato";
+import type { SituacaoFiscalExtraida } from "@/server/extraction/situacao-fiscal";
 import { paraCompetencia } from "@/server/extraction/identificar-empresa";
 
 /**
@@ -28,6 +29,7 @@ export interface ContagemPersistida {
   apuracoesContribuicoes: number;
   apuracoesSimples: number;
   eventos: number;
+  pendenciasFiscais: number;
 }
 
 export function contagemVazia(): ContagemPersistida {
@@ -38,6 +40,7 @@ export function contagemVazia(): ContagemPersistida {
     apuracoesContribuicoes: 0,
     apuracoesSimples: 0,
     eventos: 0,
+    pendenciasFiscais: 0,
   };
 }
 
@@ -52,6 +55,7 @@ export function somarContagens(
     apuracoesContribuicoes: a.apuracoesContribuicoes + b.apuracoesContribuicoes,
     apuracoesSimples: a.apuracoesSimples + b.apuracoesSimples,
     eventos: a.eventos + b.eventos,
+    pendenciasFiscais: a.pendenciasFiscais + b.pendenciasFiscais,
   };
 }
 
@@ -61,7 +65,8 @@ export function totalDe(c: ContagemPersistida): number {
     c.apuracoesIcms +
     c.apuracoesContribuicoes +
     c.apuracoesSimples +
-    c.eventos
+    c.eventos +
+    c.pendenciasFiscais
   );
 }
 
@@ -394,6 +399,76 @@ export async function persistirPgdas(
     update: {},
   });
   return 1;
+}
+
+/**
+ * Valor monetário do relatório de situação fiscal ("1.234,56") → Decimal.
+ *
+ * Ausente devolve `undefined`, nunca zero: nem toda pendência tem valor (omissão
+ * de declaração não tem), e escrever zero somaria nada ao total como se fosse
+ * uma dívida quitada.
+ */
+function valorBr(v: string | undefined): Prisma.Decimal | undefined {
+  if (!v) return undefined;
+  const limpo = v.replace(/\./g, "").replace(",", ".").trim();
+  if (!/^-?\d+(\.\d+)?$/.test(limpo)) return undefined;
+  return new Prisma.Decimal(limpo);
+}
+
+export async function persistirSituacaoFiscal(
+  tx: Prisma.TransactionClient,
+  documentoId: string,
+  extraida: SituacaoFiscalExtraida,
+): Promise<number> {
+  await tx.retratoSituacaoFiscal.upsert({
+    where: { documentoId },
+    create: {
+      documentoId,
+      cnpj: extraida.cnpj,
+      razaoSocial: extraida.razaoSocial,
+      situacaoCadastral: extraida.situacaoCadastral,
+      motivoSituacao: extraida.motivoSituacao,
+      naturezaJuridica: extraida.naturezaJuridica,
+      cnae: extraida.cnae,
+      porte: extraida.porte,
+      dataAbertura: extraida.dataAbertura,
+      municipio: extraida.municipio,
+      uf: extraida.uf,
+      unidadeAdministrativa: extraida.unidadeAdministrativa,
+      responsavel: extraida.responsavel,
+      emitidoEm: extraida.emitidoEm,
+      certidaoNumero: extraida.certidao?.numero,
+      certidaoEmissao: extraida.certidao?.emissao,
+      certidaoValidade: extraida.certidao?.validade,
+      semPendencias: extraida.semPendencias,
+      socios: extraida.socios as unknown as Prisma.InputJsonValue,
+      avisos: extraida.avisos as unknown as Prisma.InputJsonValue,
+    },
+    update: {},
+  });
+
+  if (extraida.pendencias.length > 0) {
+    await tx.pendenciaFiscal.createMany({
+      data: extraida.pendencias.map((p) => ({
+        documentoId,
+        natureza: p.natureza,
+        orgao: p.orgao,
+        descricao: p.descricao,
+        receita: p.receita,
+        periodo: p.periodo,
+        vencimento: p.vencimento,
+        valorOriginal: valorBr(p.valorOriginal),
+        saldoDevedor: valorBr(p.saldoDevedor),
+        multa: valorBr(p.multa),
+        juros: valorBr(p.juros),
+        saldoConsolidado: valorBr(p.saldoConsolidado),
+        situacao: p.situacao,
+        identificacao: p.identificacao,
+      })),
+    });
+  }
+
+  return extraida.pendencias.length;
 }
 
 /**
