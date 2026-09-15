@@ -272,3 +272,240 @@ body {
 .achado[data-sev="OPORTUNIDADE"] {
   border-left-color: var(--success);
 }
+
+/* ============================================================
+   RELATÓRIO PARA IMPRESSÃO / PDF
+   ============================================================
+   O PDF é gerado pelo próprio navegador (Ctrl+P → Salvar como PDF).
+   Evita dependência de Chromium headless, que pesa 150 MB e costuma
+   falhar em rede corporativa — e o resultado sai com texto vetorial,
+   selecionável, em vez de imagem. */
+
+.rel {
+  max-width: 190mm;
+  margin: 0 auto;
+  background: #fff;
+  color: var(--text);
+  font-size: 10pt;
+  line-height: 1.45;
+}
+
+.rel-capa {
+  padding: 18mm 0 10mm;
+  border-bottom: 3px solid var(--azuos-primary);
+}
+
+.rel-marca {
+  font-size: 20pt;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--azuos-primary);
+}
+
+.rel-sub {
+  font-size: 9pt;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--muted);
+}
+
+.rel h2 {
+  font-size: 12pt;
+  font-weight: 700;
+  margin: 10mm 0 3mm;
+  padding-bottom: 1.5mm;
+  border-bottom: 1px solid var(--border);
+}
+
+.rel h3 {
+  font-size: 10pt;
+  font-weight: 700;
+  margin: 6mm 0 2mm;
+}
+
+.rel-numeros {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4mm;
+  margin: 6mm 0;
+}
+
+.rel-numero {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--azuos-accent);
+  border-radius: 4px;
+  padding: 4mm;
+}
+
+.rel-numero-rotulo {
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.rel-numero-valor {
+  font-size: 15pt;
+  font-weight: 800;
+  margin-top: 1mm;
+}
+
+.rel-numero-nota {
+  font-size: 7.5pt;
+  color: var(--muted);
+  margin-top: 0.5mm;
+}
+
+.rel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+  margin-bottom: 3mm;
+}
+
+.rel table th {
+  text-align: left;
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  padding: 1.5mm 2mm;
+}
+
+.rel table td {
+  padding: 1.5mm 2mm;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: top;
+}
+
+.rel .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* O achado é a unidade do relatório: nunca deve ser partido entre páginas. */
+.rel-achado {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: 4px;
+  padding: 3.5mm 4mm;
+  margin-bottom: 3mm;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.rel-achado[data-sev="CRITICO"] { border-left-color: var(--danger); }
+.rel-achado[data-sev="ALTO"] { border-left-color: var(--warning); }
+.rel-achado[data-sev="MEDIO"] { border-left-color: var(--info); }
+.rel-achado[data-sev="OPORTUNIDADE"] { border-left-color: var(--success); }
+
+.rel-achado-topo {
+  display: flex;
+  align-items: baseline;
+  gap: 2mm;
+  margin-bottom: 1.5mm;
+}
+
+.rel-cod {
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 8.5pt;
+}
+
+.rel-titulo {
+  font-weight: 700;
+  font-size: 9.5pt;
+  flex: 1;
+}
+
+.rel-valor {
+  font-weight: 800;
+  font-size: 10.5pt;
+  font-variant-numeric: tabular-nums;
+}
+
+.rel-tag {
+  display: inline-block;
+  font-size: 7pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 0.3mm 1.5mm;
+  border-radius: 2px;
+}
+
+.rel-obs {
+  font-size: 8pt;
+  color: var(--muted);
+  margin-top: 1.5mm;
+}
+
+.rel-ressalva {
+  font-size: 8pt;
+  background: #f8fafc;
+  border-left: 2px solid var(--border);
+  padding: 1.5mm 2mm;
+  margin-top: 1.5mm;
+}
+
+.rel-rodape {
+  margin-top: 10mm;
+  padding-top: 3mm;
+  border-top: 1px solid var(--border);
+  font-size: 7.5pt;
+  color: var(--muted);
+}
+
+.rel-secao {
+  break-before: page;
+  page-break-before: always;
+}
+
+@media print {
+  /* Margem do papel; o resto do espaçamento é do próprio relatório. */
+  @page {
+    size: A4 portrait;
+    margin: 14mm 12mm;
+  }
+
+  /* A barra lateral, as abas e os botões não existem no papel. */
+  .sidebar,
+  .hdr,
+  .tabs,
+  .nao-imprime {
+    display: none !important;
+  }
+
+  .shell {
+    display: block !important;
+  }
+
+  .main {
+    padding: 0 !important;
+    background: #fff !important;
+    overflow: visible !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .rel {
+    max-width: none;
+  }
+
+  /* Sem isto o navegador descarta as cores de severidade na impressão, e o
+     relatório perde justamente a leitura mais rápida que ele oferece. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Título nunca fica órfão no pé da página. */
+  h2, h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+}

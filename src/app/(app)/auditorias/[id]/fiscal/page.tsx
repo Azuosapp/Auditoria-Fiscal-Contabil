@@ -43,15 +43,18 @@ export default async function FiscalPage({
     ]),
   );
 
-  // Achado decaído fica fora dos totais: não é exigível nem recuperável.
+  // Achado decaído fica fora dos totais: não é exigível nem recuperável. E
+  // achado de confiança não-ALTA entra num número próprio — somá-lo ao risco
+  // seria prometer o que ainda depende de conferência documental.
   const exigiveis = achados.filter((a) => a.situacaoPrescricional !== "DECAIDO");
-  const somar = (oportunidade: boolean) =>
+  const somar = (filtro: (a: (typeof exigiveis)[number]) => boolean) =>
     exigiveis
-      .filter((a) => (a.severidade === "OPORTUNIDADE") === oportunidade)
-      .reduce(
-        (s, a) => s.plus(a.valorExposicao ?? 0),
-        new Prisma.Decimal(0),
-      );
+      .filter(filtro)
+      .reduce((s, a) => s.plus(a.valorExposicao ?? 0), new Prisma.Decimal(0));
+
+  const confirmado = (a: (typeof exigiveis)[number]) => a.confianca === "ALTA";
+  const aConfirmar = somar((a) => !confirmado(a));
+  const qtdAConfirmar = exigiveis.filter((a) => !confirmado(a)).length;
 
   return (
     <>
@@ -69,11 +72,23 @@ export default async function FiscalPage({
       <div className="kpis mb-3">
         <div className="kpi" style={{ borderLeftColor: "var(--danger)" }}>
           <div className="kpi-label">Risco de autuação</div>
-          <div className="kpi-val">{moeda(somar(false))}</div>
+          <div className="kpi-val">
+            {moeda(somar((a) => confirmado(a) && a.severidade !== "OPORTUNIDADE"))}
+          </div>
+          <div className="kpi-sub">confirmado</div>
         </div>
         <div className="kpi" style={{ borderLeftColor: "var(--success)" }}>
           <div className="kpi-label">A recuperar</div>
-          <div className="kpi-val">{moeda(somar(true))}</div>
+          <div className="kpi-val">
+            {moeda(somar((a) => confirmado(a) && a.severidade === "OPORTUNIDADE"))}
+          </div>
+        </div>
+        <div className="kpi" style={{ borderLeftColor: "var(--info)" }}>
+          <div className="kpi-label">A confirmar</div>
+          <div className="kpi-val">{moeda(aConfirmar)}</div>
+          <div className="kpi-sub">
+            {qtdAConfirmar} achado(s) com ressalva
+          </div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Achados fiscais</div>

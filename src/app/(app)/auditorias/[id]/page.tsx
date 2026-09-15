@@ -154,9 +154,17 @@ export default async function AuditoriaPage({
             {fmtComp(auditoria.competenciaIni)} a {fmtComp(auditoria.competenciaFim)}
           </p>
         </div>
-        <Link href={`/importar?auditoria=${auditoria.id}`} className="btn-ghost">
-          Importar mais arquivos
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href={`/auditorias/${auditoria.id}/relatorio`}
+            className="btn-primary"
+          >
+            Gerar PDF
+          </Link>
+          <Link href={`/importar?auditoria=${auditoria.id}`} className="btn-ghost">
+            Importar mais arquivos
+          </Link>
+        </div>
       </div>
 
       <AbasAuditoria auditoriaId={auditoria.id} contagens={achadosPorArea} />

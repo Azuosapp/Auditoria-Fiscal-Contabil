@@ -53,7 +53,8 @@ sobe com o Windows). Usuário `azuos`, senha em `.env`.
 ✓ Prescrição                          art. 173, I x art. 150, § 4º do CTN
 ✓ Tela de achados                     os 3 números da página 1 + evidência
 ✗ Consolidação apurado × confessado × pago (depende dos parsers acima)
-✗ Relatório em PDF/XLSX
+✓ Relatório em PDF                    layout A4 próprio; o PDF sai do navegador
+✗ Exportação em XLSX
 ```
 
 ## Documentação

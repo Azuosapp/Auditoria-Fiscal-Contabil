@@ -17,6 +17,7 @@ const ABAS = [
   { sufixo: "/fiscal", rotulo: "Fiscal" },
   { sufixo: "/contabil", rotulo: "Contábil" },
   { sufixo: "/situacao-fiscal", rotulo: "Situação fiscal" },
+  { sufixo: "/relatorio", rotulo: "Relatório" },
 ];
 
 export function AbasAuditoria({

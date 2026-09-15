@@ -48,14 +48,22 @@ export default async function ContabilPage({
   // Débito em aberto é o que a empresa já declarou e não pagou — dívida líquida
   // e certa (família A). O resto é exposição a lançamento de ofício. Somar os
   // dois seria desonesto: têm naturezas jurídicas diferentes.
-  const somar = (filtro: (codigo: string, severidade: string) => boolean) =>
+  const somar = (
+    filtro: (codigo: string, severidade: string, confianca: string) => boolean,
+  ) =>
     exigiveis
-      .filter((a) => filtro(a.codigo, a.severidade))
+      .filter((a) => filtro(a.codigo, a.severidade, a.confianca))
       .reduce((s, a) => s.plus(a.valorExposicao ?? 0), new Prisma.Decimal(0));
 
-  const debitoAberto = somar((c, s) => c.startsWith("A") && s !== "OPORTUNIDADE");
-  const risco = somar((c, s) => !c.startsWith("A") && s !== "OPORTUNIDADE");
-  const recuperavel = somar((_, s) => s === "OPORTUNIDADE");
+  const debitoAberto = somar(
+    (c, s, conf) => conf === "ALTA" && c.startsWith("A") && s !== "OPORTUNIDADE",
+  );
+  const risco = somar(
+    (c, s, conf) => conf === "ALTA" && !c.startsWith("A") && s !== "OPORTUNIDADE",
+  );
+  const recuperavel = somar((_, s, conf) => conf === "ALTA" && s === "OPORTUNIDADE");
+  const aConfirmar = somar((_c, _s, conf) => conf !== "ALTA");
+  const qtdAConfirmar = exigiveis.filter((a) => a.confianca !== "ALTA").length;
 
   return (
     <>
@@ -84,6 +92,11 @@ export default async function ContabilPage({
         <div className="kpi" style={{ borderLeftColor: "var(--success)" }}>
           <div className="kpi-label">A recuperar</div>
           <div className="kpi-val">{moeda(recuperavel)}</div>
+        </div>
+        <div className="kpi" style={{ borderLeftColor: "var(--info)" }}>
+          <div className="kpi-label">A confirmar</div>
+          <div className="kpi-val">{moeda(aConfirmar)}</div>
+          <div className="kpi-sub">{qtdAConfirmar} achado(s) com ressalva</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Achados contábeis</div>

@@ -322,6 +322,7 @@ async function calcularTotais(auditoriaId: string) {
     where: { auditoriaId, situacaoPrescricional: { not: "DECAIDO" } },
     select: {
       severidade: true,
+      confianca: true,
       valorExposicao: true,
       codigo: true,
     },
@@ -330,10 +331,28 @@ async function calcularTotais(auditoriaId: string) {
   let debitoAberto = new Prisma.Decimal(0);
   let riscoAutuacao = new Prisma.Decimal(0);
   let recuperavel = new Prisma.Decimal(0);
+  let aConfirmar = new Prisma.Decimal(0);
 
   for (const a of achados) {
     const valor = a.valorExposicao;
     if (!valor) continue;
+
+    /**
+     * Achado de confiança não-ALTA fica FORA dos três números da capa.
+     *
+     * É o caso do B05, por exemplo: a base de PIS/COFINS legitimamente exclui
+     * receita monofásica, de alíquota zero e de exportação, e a divergência
+     * pode ser inteiramente explicada por isso. Levar meio milhão desses à
+     * primeira página como "risco de autuação" seria prometer um risco que
+     * talvez não exista — e a reunião acaba no momento em que o contador do
+     * cliente explicar a exclusão.
+     *
+     * Eles aparecem em número próprio, "a confirmar", que é o que são.
+     */
+    if (a.confianca !== "ALTA") {
+      aConfirmar = aConfirmar.plus(valor);
+      continue;
+    }
 
     if (a.severidade === "OPORTUNIDADE") {
       recuperavel = recuperavel.plus(valor);
@@ -349,7 +368,7 @@ async function calcularTotais(auditoriaId: string) {
     }
   }
 
-  return { debitoAberto, riscoAutuacao, recuperavel };
+  return { debitoAberto, riscoAutuacao, recuperavel, aConfirmar };
 }
 
 /** Nível efetivamente alcançado, conforme o que foi entregue. */
