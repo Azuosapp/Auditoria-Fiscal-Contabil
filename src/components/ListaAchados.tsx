@@ -38,8 +38,13 @@ type AchadoComEvidencias = Achado & { evidencias: Evidencia[] };
  *
  * O total não convence: a nota 3001, emitida em 20/01, de R$ 625,00, que não
  * está no SPED, convence — porque o cliente confere no sistema dele enquanto
- * conversa. Fica aberto por padrão, não escondido atrás de "ver evidência":
- * é a parte mais útil do achado.
+ * conversa.
+ *
+ * Fica recolhido. Aberto, cada achado ocupava meia tela e a lista deixava de
+ * ser percorrível: com 18 achados não dava para ver quantos eram nem de que
+ * gravidade. O resumo diz o que há dentro, e quem vai conferir aquele achado
+ * abre só ele. No relatório impresso é o contrário — lá o exemplo sai sempre,
+ * porque no papel não há o que clicar.
  */
 function ExemploDoErro({
   evidencias,
@@ -59,13 +64,33 @@ function ExemploDoErro({
   // Oportunidade não é erro: chamar de "exemplo do erro" a base de uma
   // recomendação de planejamento faria o relatório acusar o cliente de algo
   // que ele não fez.
-  const rotulo =
-    severidade === "OPORTUNIDADE"
-      ? "Base da recomendação"
-      : "Exemplo do erro encontrado";
+  const oportunidade = severidade === "OPORTUNIDADE";
+  const rotulo = oportunidade
+    ? "Base da recomendação"
+    : "Exemplo do erro encontrado";
+
+  // O que o resumo promete: quantas linhas, de que natureza. Sem isso o
+  // usuário não sabe se vale o clique.
+  const partes: string[] = [];
+  if (exemplos.length > 0) {
+    partes.push(
+      temDocumento
+        ? `${exemplos.length} documento(s)`
+        : `${exemplos.length} linha(s) de cálculo`,
+    );
+  }
+  if (confrontos.length > 0) partes.push(`${confrontos.length} número(s) confrontado(s)`);
 
   return (
-    <div className="mt-2 space-y-2">
+    <details className="mt-2 rounded-md border border-surface-border">
+      <summary className="cursor-pointer px-2 py-1 text-[10px] font-medium text-content-muted">
+        {oportunidade ? "Ver a base da recomendação" : "Ver o exemplo deste erro"}
+        {partes.length > 0 ? (
+          <span className="font-normal"> — {partes.join(" · ")}</span>
+        ) : null}
+      </summary>
+
+      <div className="space-y-2 border-t border-surface-border p-2">
       {confrontos.length > 0 ? (
         <div className="overflow-hidden rounded-md border border-surface-border">
           <div className="border-b border-surface-border bg-[#f8fafc] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.4px] text-content-muted">
@@ -161,7 +186,8 @@ function ExemploDoErro({
             .join("; ")}
         </div>
       ) : null}
-    </div>
+      </div>
+    </details>
   );
 }
 
