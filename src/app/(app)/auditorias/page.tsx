@@ -62,6 +62,7 @@ export default async function AuditoriasPage() {
                 <th className="w-20">Docs</th>
                 <th className="w-20">Achados</th>
                 <th className="w-32">Exposição</th>
+                <th className="w-24"></th>
               </tr>
             </thead>
             <tbody>
@@ -88,6 +89,16 @@ export default async function AuditoriasPage() {
                   <td className="num">{a._count.achados}</td>
                   <td className="num font-semibold">
                     {moeda(a.totalDebitoAberto)}
+                  </td>
+                  <td>
+                    {/* O relatório é o produto final da auditoria: precisa
+                        estar a um clique da lista, não escondido lá dentro. */}
+                    <Link
+                      href={`/auditorias/${a.id}/relatorio`}
+                      className="btn-ghost !px-2 !py-1 !text-[10px]"
+                    >
+                      Gerar PDF
+                    </Link>
                   </td>
                 </tr>
               ))}
