@@ -414,6 +414,37 @@ const FAMILIA_C: DefinicaoAchado[] = [
       "Foram apropriados {valor} de crédito sobre produtos monofásicos em {competencia} — crédito que a Receita glosa em fiscalização.",
   },
   {
+    codigo: "C02",
+    area: "FISCAL",
+    regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
+    titulo: "Combustível monofásico escriturado com CST genérico",
+    familia: "CREDITO",
+    severidade: "MEDIO",
+    tributo: "PIS_COFINS",
+    fontesNecessarias: ["SPED_FISCAL"],
+    descricao:
+      "Aquisição de combustível sujeito à tributação concentrada escriturada " +
+      "com CST 98 ou 99 (outras operações). A classificação correta é 70 a 75, " +
+      "conforme a razão pela qual não há crédito — normalmente 73, aquisição a " +
+      "alíquota zero, quando a compra é de distribuidor ou revendedor.",
+    exemplo:
+      "31 notas de GLP (NCM 2711.19.10), somando R$ 200.511,31, escrituradas " +
+      "com CFOP 1651 (industrialização subsequente) e CST de PIS/COFINS 99. " +
+      "O GLP é monofásico e a venda por distribuidor é a alíquota zero: o CST " +
+      "próprio é o 73.",
+    baseLegal: [
+      "Lei nº 9.718/1998, art. 4º, III",
+      "MP nº 2.158-35/2001, art. 42, I",
+      "Lei nº 10.833/2003, art. 3º, § 2º, II",
+      "Tabela 4.3.4 da EFD-Contribuições",
+    ],
+    textoCliente:
+      "Em {competencia} há aquisições de combustível escrituradas com CST " +
+      "genérico (98/99), somando {valor}. Não altera tributo devido, mas é " +
+      "inconsistência que aparece no cruzamento da Receita e dificulta " +
+      "demonstrar que o crédito foi corretamente não tomado.",
+  },
+  {
     codigo: "C03",
     area: "FISCAL",
     regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],

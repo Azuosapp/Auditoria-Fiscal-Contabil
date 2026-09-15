@@ -52,12 +52,150 @@ function rotuloCst(cst: string | null | undefined): string {
 }
 
 export const familiaC: Regra = {
-  codigos: ["C01"],
+  codigos: ["C01", "C02"],
 
   async executar(ctx: ContextoRegra): Promise<AchadoProduzido[]> {
-    return c01CreditoSobreItemSemDireito(ctx);
+    return [
+      ...(await c01CreditoSobreItemSemDireito(ctx)),
+      ...(await c02CombustivelComCstGenerico(ctx)),
+    ];
   },
 };
+
+/**
+ * NCM de combustíveis sujeitos à tributação concentrada de PIS/COFINS.
+ *
+ * 2710 são os óleos de petróleo (gasolina, diesel, querosene, lubrificantes) e
+ * 2711 os gases de petróleo (GLP, GNV). A Lei nº 9.718/1998, art. 4º, concentra
+ * a contribuição no produtor e no importador, e a MP nº 2.158-35/2001, art. 42,
+ * I, zera a alíquota na venda por distribuidor e comerciante varejista.
+ *
+ * O prefixo basta: a posição da NCM já identifica o produto como combustível.
+ */
+const NCM_COMBUSTIVEL = ["2710", "2711"];
+
+/**
+ * CST que dizem apenas "outras operações" — não explicam por que não houve
+ * crédito. Na aquisição de monofásico, o correto vem da faixa 70 a 75.
+ */
+const CST_GENERICO = new Set(["98", "99"]);
+
+/**
+ * C02 — combustível monofásico escriturado com CST genérico.
+ *
+ * Não muda tributo: o crédito não existe de qualquer forma, porque a compra de
+ * distribuidor se dá a alíquota zero e o art. 3º, § 2º, II da Lei nº
+ * 10.833/2003 veda crédito sobre aquisição não sujeita ao pagamento da
+ * contribuição — inclusive quando o bem é insumo legítimo, como o GLP de forno
+ * numa metalúrgica.
+ *
+ * O que o achado aponta é a IMPRECISÃO: com CST 99 a escrituração não registra
+ * o motivo de não haver crédito. Com 73 (aquisição a alíquota zero), registra —
+ * e é isso que sustenta a posição da empresa num cruzamento da Receita.
+ *
+ * Encontrado em arquivo real: 31 notas de GLP com CFOP 1651 (industrialização
+ * subsequente) e CST 99.
+ */
+async function c02CombustivelComCstGenerico(
+  ctx: ContextoRegra,
+): Promise<AchadoProduzido[]> {
+  if (!ctx.fontesDisponiveis.has("SPED_FISCAL")) return [];
+
+  const itens = await prisma.notaFiscalItem.findMany({
+    where: {
+      nota: {
+        documento: { auditoriaId: ctx.auditoriaId },
+        direcao: "ENTRADA",
+        situacao: "AUTORIZADA",
+      },
+      OR: NCM_COMBUSTIVEL.map((prefixo) => ({ ncm: { startsWith: prefixo } })),
+    },
+    select: {
+      ncm: true,
+      cfop: true,
+      cstPis: true,
+      cstCofins: true,
+      descricao: true,
+      valorItem: true,
+      nota: {
+        select: { numero: true, competencia: true, dataEmissao: true },
+      },
+    },
+    orderBy: { valorItem: "desc" },
+  });
+
+  const genericos = itens.filter(
+    (i) => CST_GENERICO.has(i.cstPis ?? "") || CST_GENERICO.has(i.cstCofins ?? ""),
+  );
+  if (genericos.length === 0) return [];
+
+  const porCompetencia = new Map<string, typeof genericos>();
+  for (const i of genericos) {
+    const lista = porCompetencia.get(i.nota.competencia) ?? [];
+    lista.push(i);
+    porCompetencia.set(i.nota.competencia, lista);
+  }
+
+  return [...porCompetencia.entries()].map(([competencia, lista]) => {
+    const soma = lista.reduce((s, i) => s.plus(i.valorItem), ZERO);
+    // O CFOP diz o destino dado ao combustível, e muda a conversa: 1651 é
+    // industrialização, 1653 é consumo do próprio estabelecimento.
+    const cfops = [...new Set(lista.map((i) => i.cfop).filter(Boolean))];
+
+    return {
+      codigo: "C02",
+      competencia,
+      confianca: "ALTA" as const,
+      descricao:
+        `${lista.length} aquisição(ões) de combustível (NCM ${[
+          ...new Set(lista.map((i) => i.ncm)),
+        ].join(", ")}) escriturada(s) com CST de PIS/COFINS 98 ou 99, somando ` +
+        `${moeda(soma)}. CFOP utilizado: ${cfops.join(", ") || "não informado"}.`,
+      textoCliente:
+        `Em ${mesAno(competencia)} há ${lista.length} aquisição(ões) de ` +
+        `combustível escriturada(s) com CST genérico (98/99), somando ` +
+        `${moeda(soma)}. Não altera o tributo devido — o crédito não caberia de ` +
+        `qualquer forma, porque a venda por distribuidor é a alíquota zero —, ` +
+        `mas a escrituração deixa de registrar POR QUE não houve crédito.`,
+      recomendacao:
+        "Reclassificar para o CST da faixa 70 a 75 conforme o caso, em regra o " +
+        "73 (aquisição a alíquota zero) quando a compra é de distribuidor ou " +
+        "revendedor. Se a aquisição for direto de produtor ou importador, a " +
+        "situação é outra e merece análise própria.",
+      // Sem valor de exposição: não há tributo a recolher nem a recuperar. O
+      // achado é de qualidade da escrituração, e pôr o valor das compras aqui
+      // inflaria o total do relatório com algo que não é risco.
+      declarado: true,
+      evidencias: [
+        ...lista.slice(0, 10).map((i) => ({
+          tipo: "EXEMPLO" as const,
+          arquivo: `SPED Fiscal ${mesAno(competencia)}`,
+          registro: "C170",
+          documentoNumero: `NF ${i.nota.numero}`,
+          dataDocumento: i.nota.dataEmissao.toLocaleDateString("pt-BR", {
+            timeZone: "UTC",
+          }),
+          campo: `${i.descricao ?? "combustível"} · NCM ${i.ncm} · CFOP ${
+            i.cfop ?? "—"
+          }`,
+          valor: moeda(i.valorItem),
+          observacao: `CST PIS ${i.cstPis ?? "—"} / COFINS ${
+            i.cstCofins ?? "—"
+          } — genérico; o próprio seria 73 (aquisição a alíquota zero)`,
+        })),
+        {
+          tipo: "CONTEXTO" as const,
+          arquivo: "Regime do produto",
+          observacao:
+            "Combustível sujeito à tributação concentrada: Lei nº 9.718/1998, " +
+            "art. 4º. A venda por distribuidor e varejista é a alíquota zero " +
+            "(MP nº 2.158-35/2001, art. 42, I), e o crédito é vedado pelo art. " +
+            "3º, § 2º, II da Lei nº 10.833/2003 — mesmo sendo insumo.",
+        },
+      ],
+    };
+  });
+}
 
 /**
  * C01 — entradas sem direito a crédito enquanto a empresa apropria crédito.
