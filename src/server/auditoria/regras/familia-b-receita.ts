@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { AchadoProduzido, ContextoRegra, Regra } from "../tipos";
 import { mesAno, moeda, percentual as pct } from "../texto";
+import { exercicioDe } from "../prescricao";
 
 /**
  * Família B — receita e omissão.
@@ -18,7 +19,7 @@ const ZERO = new Prisma.Decimal(0);
 const TOLERANCIA = new Prisma.Decimal("0.02");
 
 export const familiaB: Regra = {
-  codigos: ["B01", "B02", "B03", "B05", "B07", "B11"],
+  codigos: ["B01", "B02", "B03", "B05", "B07", "B11", "B12"],
 
   async executar(ctx: ContextoRegra): Promise<AchadoProduzido[]> {
     const achados: AchadoProduzido[] = [];
@@ -29,6 +30,7 @@ export const familiaB: Regra = {
     achados.push(...(await b05ReceitaDivergenteEntreEscrituracoes(ctx)));
     achados.push(...(await b07ReceitaPgdasMenorQueReal(ctx)));
     achados.push(...(await b11NotaDeTerceiroComoSaida(ctx)));
+    achados.push(...(await b12ContribuicoesSemReceita(ctx)));
 
     return achados;
   },
@@ -610,6 +612,213 @@ async function b07ReceitaPgdasMenorQueReal(
           campo: "receita real menos declarada",
           valor: moeda(diferenca),
         },
+      ],
+    });
+  }
+
+  return achados;
+}
+
+/**
+ * B12 — EFD-Contribuições sem receita, com faturamento no SPED Fiscal.
+ *
+ * O caso que o B05 não alcança. O B05 compara duas receitas declaradas; aqui
+ * uma delas simplesmente não existe: a EFD-Contribuições veio com todos os
+ * blocos sem dados e M200/M600 zerados, enquanto o SPED Fiscal do mesmo mês
+ * escritura saídas com débito de ICMS.
+ *
+ * Não é divergência de critério — é receita que não foi oferecida à tributação
+ * federal. Por isso nasce CRÍTICO, e não como variação percentual.
+ *
+ * A confiança é MÉDIA de propósito: a soma das saídas do SPED inclui operações
+ * que não são receita (remessa, devolução, transferência, bonificação), e o
+ * C170 não vem nas saídas próprias, então não dá para expurgá-las por CFOP
+ * aqui. O valor sai como estimativa declarada, para conferência — não como
+ * número a cobrar do cliente.
+ */
+async function b12ContribuicoesSemReceita(
+  ctx: ContextoRegra,
+): Promise<AchadoProduzido[]> {
+  if (
+    !ctx.fontesDisponiveis.has("SPED_FISCAL") ||
+    !ctx.fontesDisponiveis.has("SPED_CONTRIBUICOES")
+  ) {
+    return [];
+  }
+
+  const [saidasPorMes, apuracoes, apuracoesIcms] = await Promise.all([
+    prisma.notaFiscal.groupBy({
+      by: ["competencia"],
+      where: {
+        documento: { auditoriaId: ctx.auditoriaId },
+        origem: "ESCRITURACAO",
+        direcao: "SAIDA",
+        situacao: "AUTORIZADA",
+      },
+      _sum: { valorTotal: true, valorIpi: true, valorIcmsSt: true },
+      _count: { _all: true },
+    }),
+    prisma.apuracaoContribuicoes.findMany({
+      where: { documento: { auditoriaId: ctx.auditoriaId } },
+      select: {
+        competencia: true,
+        contribuicao: true,
+        baseCalculo: true,
+        valorApurado: true,
+      },
+    }),
+    prisma.apuracaoFiscal.findMany({
+      where: { documento: { auditoriaId: ctx.auditoriaId } },
+      select: { competencia: true, debitos: true },
+    }),
+  ]);
+
+  // Competências em que a EFD-Contribuições foi entregue. Sem entrega, o caso
+  // é outro — falta de arquivo, que já vira lacuna.
+  const entregues = new Set(apuracoes.map((a) => a.competencia));
+
+  /** Zerada: nenhuma base e nenhum valor apurado em nenhuma contribuição. */
+  const semReceita = new Set(
+    [...entregues].filter((competencia) =>
+      apuracoes
+        .filter((a) => a.competencia === competencia)
+        .every(
+          (a) =>
+            (a.baseCalculo === null || a.baseCalculo.isZero()) &&
+            a.valorApurado.isZero(),
+        ),
+    ),
+  );
+
+  const debitoIcms = new Map(
+    apuracoesIcms.map((a) => [a.competencia, a.debitos]),
+  );
+
+  const achados: AchadoProduzido[] = [];
+
+  for (const s of saidasPorMes) {
+    if (!semReceita.has(s.competencia)) continue;
+
+    const totalNotas = s._sum.valorTotal ?? ZERO;
+    const receita = totalNotas
+      .minus(s._sum.valorIpi ?? ZERO)
+      .minus(s._sum.valorIcmsSt ?? ZERO);
+    if (receita.lessThanOrEqualTo(0)) continue;
+
+    const exercicio = exercicioDe(s.competencia);
+    const regime = ctx.regimePorExercicio.get(exercicio);
+    const cumulativo = regime === "LUCRO_PRESUMIDO";
+
+    // Só estima o tributo no regime cumulativo, onde a conta é direta:
+    // 0,65% de PIS e 3% de COFINS sobre a receita. No não cumulativo o valor
+    // depende dos créditos do período, que não estão apurados aqui — estimar
+    // seria dar ao cliente um número que o estudo ainda vai desmentir.
+    const estimativa = cumulativo
+      ? receita.times(new Prisma.Decimal("0.0365"))
+      : undefined;
+
+    const icms = debitoIcms.get(s.competencia);
+
+    achados.push({
+      codigo: "B12",
+      competencia: s.competencia,
+      confianca: "MEDIA",
+      descricao:
+        `${s._count._all} nota(s) de saída escriturada(s) no SPED Fiscal, ` +
+        `somando ${moeda(receita)}, e EFD-Contribuições da mesma competência ` +
+        `entregue sem receita (M200 e M600 zerados).`,
+      textoCliente:
+        `Em ${mesAno(s.competencia)} a empresa escriturou ${moeda(receita)} de ` +
+        `saídas no SPED Fiscal` +
+        (icms && !icms.isZero()
+          ? `, com ${moeda(icms)} de débito de ICMS,`
+          : "") +
+        ` e entregou a EFD-Contribuições sem nenhuma receita. PIS e COFINS não ` +
+        `foram apurados sobre o faturamento do mês.` +
+        (estimativa
+          ? ` No regime cumulativo, a contribuição sobre essa receita seria de ` +
+            `aproximadamente ${moeda(estimativa)}.`
+          : ""),
+      recomendacao:
+        "Confirmar se houve faturamento na competência e, havendo, retificar a " +
+        "EFD-Contribuições com a receita e a apuração devidas, recolhendo PIS " +
+        "e COFINS com denúncia espontânea antes de iniciada a fiscalização.",
+      valorExposicao: estimativa,
+      // Receita não declarada: não há pagamento a homologar, então a contagem
+      // da decadência é a do art. 173, I.
+      declarado: false,
+      severidade: "CRITICO",
+      ressalva:
+        "A soma das saídas do SPED Fiscal inclui operações que não são receita " +
+        "— remessa, devolução, transferência e bonificação —, e o valor acima " +
+        "não as expurga. Confirmar a receita efetiva do mês antes de apurar a " +
+        "diferença." +
+        (cumulativo
+          ? ""
+          : regime
+            ? ` No ${exercicio} a empresa está no regime não cumulativo, em ` +
+              `que a contribuição depende dos créditos do período: por isso ` +
+              `nenhum valor foi estimado aqui.`
+            : ` O regime tributário de ${exercicio} não está cadastrado — ` +
+              `cadastre-o na ficha da empresa para o sistema estimar a ` +
+              `contribuição devida sobre essa receita.`),
+      evidencias: [
+        {
+          tipo: "CONFRONTO" as const,
+          arquivo: `SPED Fiscal ${mesAno(s.competencia)}`,
+          registro: "C100",
+          campo: "saídas escrituradas, já sem IPI e ICMS-ST",
+          valor: moeda(receita),
+        },
+        {
+          tipo: "CONFRONTO" as const,
+          arquivo: `EFD-Contribuições ${mesAno(s.competencia)}`,
+          registro: "M200/M600",
+          campo: "receita informada",
+          valor: moeda(ZERO),
+        },
+        {
+          tipo: "EXEMPLO" as const,
+          arquivo: `SPED Fiscal ${mesAno(s.competencia)}`,
+          registro: "C100",
+          campo: "Notas de saída escrituradas na competência",
+          valor: `${s._count._all} nota(s) · ${moeda(receita)}`,
+          observacao: "soma do VL_DOC dos registros C100 de saída, sem IPI e ICMS-ST",
+        },
+        ...(icms && !icms.isZero()
+          ? [
+              {
+                tipo: "EXEMPLO" as const,
+                arquivo: `SPED Fiscal ${mesAno(s.competencia)}`,
+                registro: "E110",
+                campo: "Débito de ICMS apurado sobre essas saídas",
+                valor: moeda(icms),
+                observacao:
+                  "a própria empresa reconheceu a operação tributada no estadual",
+              },
+            ]
+          : []),
+        {
+          tipo: "EXEMPLO" as const,
+          arquivo: `EFD-Contribuições ${mesAno(s.competencia)}`,
+          registro: "M200 e M600",
+          campo: "Receita oferecida a PIS e COFINS",
+          valor: moeda(ZERO),
+          observacao:
+            "apuração entregue zerada, com os blocos de documentos sem dados",
+        },
+        ...(estimativa
+          ? [
+              {
+                tipo: "EXEMPLO" as const,
+                arquivo: "Cálculo",
+                campo: "Contribuição estimada no regime cumulativo",
+                valor: moeda(estimativa),
+                observacao:
+                  "PIS 0,65% + COFINS 3% sobre a receita — estimativa a confirmar",
+              },
+            ]
+          : []),
       ],
     });
   }

@@ -305,6 +305,37 @@ const FAMILIA_B: DefinicaoAchado[] = [
       "receitas diferentes, com diferença de {valor}.",
   },
   {
+    codigo: "B12",
+    area: "FISCAL",
+    titulo: "EFD-Contribuições sem receita, com faturamento no SPED Fiscal",
+    familia: "RECEITA",
+    severidade: "CRITICO",
+    tributo: "PIS/COFINS",
+    fontesNecessarias: ["SPED_FISCAL", "SPED_CONTRIBUICOES"],
+    descricao:
+      "A EFD-Contribuições da competência não informa receita alguma — blocos " +
+      "sem dados e apuração zerada —, enquanto o SPED Fiscal da mesma empresa " +
+      "e do mesmo mês traz saídas escrituradas com débito de ICMS. Duas " +
+      "declarações da própria empresa ao mesmo fisco dizendo coisas opostas " +
+      "sobre a existência de faturamento.",
+    exemplo:
+      "Em março a empresa escritura R$ 40.000,00 de saídas no SPED Fiscal, com " +
+      "R$ 4.100,00 de débito de ICMS, e entrega a EFD-Contribuições do mesmo " +
+      "mês com os registros M200 e M600 zerados e todos os blocos marcados sem " +
+      "dados. Nenhuma receita foi oferecida à tributação de PIS e COFINS.",
+    baseLegal: [
+      "Lei nº 9.718/1998, art. 2º e 3º — incidência sobre a receita bruta",
+      "Lei nº 9.715/1998, art. 8º, I — PIS de 0,65% no regime cumulativo",
+      "Lei nº 9.718/1998, art. 8º — COFINS de 3% no regime cumulativo",
+      "IN RFB nº 2.121/2022",
+      "Guia Prático da EFD-Contribuições — registros 0110, F550, M200 e M600",
+    ],
+    textoCliente:
+      "Em {competencia} a empresa escriturou saídas no SPED Fiscal e entregou " +
+      "a EFD-Contribuições sem nenhuma receita. PIS e COFINS não foram " +
+      "apurados sobre o faturamento do mês.",
+  },
+  {
     codigo: "B11",
     area: "FISCAL",
     titulo: "Nota de terceiro escriturada como saída da empresa",
