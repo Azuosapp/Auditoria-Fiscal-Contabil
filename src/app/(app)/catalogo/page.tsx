@@ -103,7 +103,8 @@ export default async function CatalogoPage() {
         <h1 className="text-[15px] font-bold">Catálogo de achados</h1>
         <p className="mt-0.5 text-[11px] text-content-muted">
           Referência do que a auditoria procura — <strong>não é o resultado de
-          nenhuma empresa</strong>.
+          nenhuma empresa</strong>. Os exemplos são ilustrativos, com valores
+          fictícios, e servem para reconhecer o erro quando ele aparecer.
           {regimeAtual
             ? ` Lista aplicável ao ${regimeAtual}, regime em que as empresas cadastradas estão enquadradas.`
             : " Cadastre o regime de uma empresa para a lista se ajustar a ele."}
@@ -165,7 +166,7 @@ export default async function CatalogoPage() {
                         <th>Achado</th>
                         <th className="w-28">Severidade</th>
                         <th className="w-24">Tributo</th>
-                        <th>Documentos necessários</th>
+                        <th className="w-40">Documentos necessários</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -177,6 +178,24 @@ export default async function CatalogoPage() {
                             <div className="mt-0.5 text-[10px] text-content-muted">
                               {d.descricao}
                             </div>
+
+                            {/* O exemplo é o que torna a regra reconhecível:
+                                "divergência entre escriturações" é abstrato;
+                                ver os dois números é o que faz a pessoa
+                                identificar o caso no cliente dela. */}
+                            <div
+                              className="mt-1.5 rounded border-l-2 px-2 py-1 text-[10px]"
+                              style={{
+                                background: "#f8fafc",
+                                borderLeftColor: "var(--azuos-accent)",
+                              }}
+                            >
+                              <span className="font-semibold uppercase tracking-[0.3px] text-content-muted">
+                                Como aparece
+                              </span>
+                              <div className="mt-0.5">{d.exemplo}</div>
+                            </div>
+
                             <div className="mt-1 text-[10px] text-content-muted">
                               {d.baseLegal.join(" · ")}
                             </div>

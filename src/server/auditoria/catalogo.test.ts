@@ -24,6 +24,38 @@ describe("catálogo", () => {
     }
   });
 
+  /**
+   * O exemplo é o que torna a regra reconhecível para quem lê o catálogo.
+   * "Divergência entre escriturações" é abstrato; ver os dois números é o que
+   * faz a pessoa identificar o caso no cliente dela. Achado novo sem exemplo
+   * entra no catálogo como texto morto.
+   */
+  it("todo achado traz exemplo concreto, com números ou registro", () => {
+    for (const d of CATALOGO) {
+      expect(d.exemplo, `${d.codigo} sem exemplo`).toBeTruthy();
+      expect(
+        d.exemplo.length,
+        `${d.codigo}: exemplo curto demais para ser concreto`,
+      ).toBeGreaterThan(60);
+
+      // Um exemplo útil cita valor, data, código de registro ou percentual.
+      const temNumero = /R\$\s?[\d.]+,\d{2}|\d{2}\/\d{4}|\d{4}-\d{2}|[A-Z]\d{3}|\d+%|CST \d{2}|CFOP \d{4}/.test(
+        d.exemplo,
+      );
+      expect(temNumero, `${d.codigo}: exemplo sem número, data ou registro`).toBe(
+        true,
+      );
+    }
+  });
+
+  it("o exemplo não repete literalmente a descrição", () => {
+    // Repetir a descrição não ensina nada: o exemplo existe para mostrar o
+    // caso concreto que a descrição enuncia em abstrato.
+    for (const d of CATALOGO) {
+      expect(d.exemplo, `${d.codigo}`).not.toBe(d.descricao);
+    }
+  });
+
   it("definicaoDe falha alto para código inexistente", () => {
     // Código inexistente é erro de programação, não dado ruim do cliente:
     // falhar em silêncio produziria achado sem título nem base legal.
