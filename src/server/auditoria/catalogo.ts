@@ -198,6 +198,22 @@ const FAMILIA_B: DefinicaoAchado[] = [
       "Notas canceladas continuam escrituradas como válidas em {competencia}, inflando a receita em {valor}.",
   },
   {
+    codigo: "B05",
+    titulo: "Receita divergente entre as escriturações do mesmo período",
+    familia: "RECEITA",
+    severidade: "ALTO",
+    tributo: "PIS_COFINS",
+    fontesNecessarias: ["SPED_FISCAL", "SPED_CONTRIBUICOES"],
+    descricao:
+      "A receita de saídas do SPED Fiscal não bate com a base de PIS/COFINS da " +
+      "EFD-Contribuições da mesma competência. São duas declarações da própria " +
+      "empresa, entregues ao mesmo fisco, que precisam conversar.",
+    baseLegal: ["IN RFB nº 2.121/2022", "Guia Prático da EFD-Contribuições"],
+    textoCliente:
+      "As duas escriturações entregues ao fisco em {competencia} apresentam " +
+      "receitas diferentes, com diferença de {valor}.",
+  },
+  {
     codigo: "B07",
     titulo: "Receita declarada no PGDAS menor que a receita real",
     familia: "RECEITA",
@@ -328,6 +344,22 @@ const FAMILIA_E: DefinicaoAchado[] = [
     baseLegal: ["EC nº 87/2015", "LC nº 190/2022"],
     textoCliente:
       "Há {valor} de DIFAL devido e não recolhido em {competencia}.",
+  },
+  {
+    codigo: "E05",
+    titulo: "CFOP incompatível com o destino da operação",
+    familia: "ICMS_OPERACIONAL",
+    severidade: "MEDIO",
+    tributo: "ICMS",
+    fontesNecessarias: ["NFE_XML"],
+    descricao:
+      "Saída com CFOP interno (5xxx) para destinatário de outra UF, ou CFOP " +
+      "interestadual (6xxx) dentro do próprio estado. O CFOP errado leva à " +
+      "alíquota errada e compromete a apuração e o diferencial de alíquota.",
+    baseLegal: ["Convênio SINIEF s/nº de 1970, Anexo — Tabela de CFOP"],
+    textoCliente:
+      "Em {competencia} há itens emitidos com CFOP incompatível com o destino " +
+      "da operação, somando {valor}.",
   },
   {
     codigo: "E06",

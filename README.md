@@ -33,7 +33,7 @@ sobe com o Windows). Usuário `azuos`, senha em `.env`.
 ```
 ✓ Modelo de dados completo         21 tabelas, migration aplicada
 ✓ Parsers portados do tax-engine   NF-e, SPED Fiscal, EFD-Contribuições, NFS-e,
-                                   PGDAS, planilha — 178 testes passando
+                                   PGDAS, planilha — 201 testes passando
 ✓ Padrão visual Azuos              extraído do GitHub, aplicado
 ✓ Catálogo de achados              32 achados em 7 famílias, tipado
 ✓ Telas                            importação, auditorias, empresas, catálogo
@@ -42,8 +42,12 @@ sobe com o Windows). Usuário `azuos`, senha em `.env`.
                                       PIS/COFINS e Simples — idempotente
 ✓ Reconciliação                       cancelamento por evento e XML × escrituração
 ✗ Parsers de ECD, ECF, DCTF, Situação Fiscal e arrecadação
-✗ Consolidação (apurado × confessado × pago) e motor de regras
-✗ Relatório
+✓ Motor de achados                    9 regras rodando com o que houver; o que
+                                      falta vira lacuna declarada, não silêncio
+✓ Prescrição                          art. 173, I x art. 150, § 4º do CTN
+✓ Tela de achados                     os 3 números da página 1 + evidência
+✗ Consolidação apurado × confessado × pago (depende dos parsers acima)
+✗ Relatório em PDF/XLSX
 ```
 
 ## Documentação

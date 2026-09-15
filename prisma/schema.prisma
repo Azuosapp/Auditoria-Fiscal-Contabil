@@ -450,6 +450,17 @@ model ApuracaoSimples {
   /// ICMS e ISS destacados fora do DAS quando o sublimite é ultrapassado.
   icmsForaDas    Decimal? @db.Decimal(18, 2)
   issForaDas     Decimal? @db.Decimal(18, 2)
+  /// "Impedido de recolher ICMS/ISS no DAS" — o sublimite dito pelo próprio
+  /// Fisco no extrato. Vale mais que qualquer inferência nossa sobre o RBT12.
+  impedidoIcmsIssNoDas Boolean?
+  /// Tributos federais discriminados no extrato, para o comparativo de regimes.
+  irpj   Decimal? @db.Decimal(18, 2)
+  csll   Decimal? @db.Decimal(18, 2)
+  pis    Decimal? @db.Decimal(18, 2)
+  cofins Decimal? @db.Decimal(18, 2)
+  cpp    Decimal? @db.Decimal(18, 2)
+  icms   Decimal? @db.Decimal(18, 2)
+  iss    Decimal? @db.Decimal(18, 2)
 
   @@unique([documentoId, competencia])
   @@index([competencia])

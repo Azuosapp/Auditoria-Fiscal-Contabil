@@ -3,6 +3,49 @@
 **Última sessão: 15/09/2026.** A próxima sessão começa sem memória desta. Leia este arquivo
 primeiro, depois `ARQUITETURA.md` e `CATALOGO_ACHADOS.md`.
 
+## Sessão de 15/09/2026 — motor de achados
+
+**A auditoria roda com o que o cliente entregou.** O motor aproveita cada regra
+que os documentos presentes sustentam e DECLARA como lacuna o que não pôde ser
+avaliado — nunca conclui a partir do que não tem.
+
+Regras implementadas (`src/server/auditoria/regras/`):
+
+| Código | Achado | Exige |
+|---|---|---|
+| B01 | NF-e autorizada e não escriturada | XML + SPED Fiscal |
+| B02 | Nota escriturada com valor divergente do XML | XML + SPED Fiscal |
+| B03 | Nota cancelada escriturada como válida | evento + SPED Fiscal |
+| B05 | Receita divergente entre SPED Fiscal e EFD-Contribuições | as duas EFD |
+| B07 | Receita do PGDAS menor que a real | PGDAS + XML |
+| C01 | Compra sem direito a crédito em mês com crédito apropriado | EFD-Contrib + entradas |
+| D01 | Sublimite do Simples sem segregar ICMS/ISS | PGDAS |
+| D02 | Fator R perto de 28% — oportunidade | PGDAS |
+| E05 | CFOP incompatível com a UF de destino | XML |
+
+**Três salvaguardas contra o falso positivo**, que é o maior risco do produto:
+
+1. Toda regra checa a fonte antes de rodar. Sem SPED Fiscal, o B01 não roda —
+   senão TODA nota apareceria como não escriturada.
+2. O B01 só compara nas competências em que há escrituração importada. Mês sem
+   SPED é lacuna declarada, não omissão de receita.
+3. Achado que depende de conferência sai com confiança MÉDIA e ressalva escrita
+   (B05 e C01 são os casos).
+
+**Prescrição**: cada achado é carimbado com a contagem correta — art. 173, I para
+omissão (não há pagamento a homologar) e art. 150, § 4º para valor declarado. As
+duas foram exercitadas no teste real e produziram datas diferentes, como devem.
+
+**Falha encontrada:** a regra produzia os códigos B05 e E05, que não existiam no
+catálogo em código. `definicaoDe` falhou alto — como projetado —, mas só na
+chamada da API. Catálogo e regras estavam corretos isoladamente e nenhum teste
+ligava os dois. Agora há um teste que percorre os códigos declarados por cada
+regra e exige que existam no catálogo.
+
+**Provado com 5 documentos** (SPED Fiscal + 2 XMLs + evento + EFD-Contribuições):
+3 achados, R$ 5.625,00 de risco de autuação, 11 regras avaliadas, 19 bloqueadas e
+19 lacunas declaradas. 201 testes passando, build limpo.
+
 ## Sessão de 15/09/2026 — extração
 
 O processamento existe e foi provado de ponta a ponta. Os arquivos importados
@@ -61,6 +104,9 @@ B01. O processamento é idempotente — três execuções seguidas não duplicar
 ## Próximo passo, em ordem
 
 ### 1. Parsers que faltam — continua sendo o gargalo
+
+Com o motor pronto, cada parser novo passa a valer mais: ele não só extrai, como
+desbloqueia regras que já estão escritas esperando a fonte.
 
 Sem eles, metade do catálogo não roda. Ordem de valor:
 

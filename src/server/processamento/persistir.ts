@@ -347,6 +347,17 @@ export async function persistirPgdas(
       receitaBruta: extrato.receitaPa,
       fatorR: extrato.fatorR,
       valorDas: extrato.dasTotal ?? new Prisma.Decimal(0),
+      // O próprio extrato diz quando a empresa está impedida de recolher ICMS e
+      // ISS no DAS. É o sublimite afirmado pelo Fisco — melhor que deduzi-lo do
+      // RBT12, porque considera o sublimite vigente em cada estado e ano.
+      impedidoIcmsIssNoDas: extrato.impedidoIcmsIssNoDas,
+      irpj: extrato.tributos?.irpj,
+      csll: extrato.tributos?.csll,
+      pis: extrato.tributos?.pis,
+      cofins: extrato.tributos?.cofins,
+      cpp: extrato.tributos?.cpp,
+      icms: extrato.tributos?.icms,
+      iss: extrato.tributos?.iss,
     },
     update: {},
   });

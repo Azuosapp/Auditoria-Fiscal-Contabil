@@ -131,9 +131,14 @@ export default async function AuditoriaPage({
             {fmtComp(auditoria.competenciaIni)} a {fmtComp(auditoria.competenciaFim)}
           </p>
         </div>
-        <Link href="/importar" className="btn-ghost">
-          Importar mais arquivos
-        </Link>
+        <div className="flex gap-2">
+          <Link href={`/auditorias/${auditoria.id}/achados`} className="btn-primary">
+            Ver achados ({auditoria._count.achados})
+          </Link>
+          <Link href="/importar" className="btn-ghost">
+            Importar mais arquivos
+          </Link>
+        </div>
       </div>
 
       <div className="kpis">
@@ -176,7 +181,12 @@ export default async function AuditoriaPage({
       </div>
 
       <div className="card mb-3">
-        <div className="mb-2 text-[11px] font-bold">Extração</div>
+        <div className="mb-1 text-[11px] font-bold">Auditar</div>
+        <p className="mb-2 text-[10px] text-content-muted">
+          Lê os arquivos importados e roda todas as regras que eles sustentam. O
+          que não puder ser avaliado por falta de documento é declarado como
+          lacuna, não omitido.
+        </p>
         <BotaoProcessar auditoriaId={auditoria.id} pendentes={pendentes} />
       </div>
 
@@ -381,11 +391,12 @@ export default async function AuditoriaPage({
       <div className="card">
         <div className="text-[11px] font-bold">Próxima etapa</div>
         <p className="mt-1 text-[10px] text-content-muted">
-          Com as apurações extraídas, falta o outro lado do cruzamento: o que foi{" "}
+          As regras que rodam hoje usam XML, SPED Fiscal, EFD-Contribuições e
+          PGDAS. Falta o outro lado do cruzamento: o que foi{" "}
           <strong>confessado</strong> (DCTF) e o que foi <strong>pago</strong>{" "}
           (DARF, DAS, DARE). Sem esses dois parsers, a família A do catálogo — os
-          oito achados críticos — não tem como se provar. Ver
-          docs/CONTINUAR_AQUI.md.
+          oito achados críticos de tributo declarado e não recolhido — continua
+          bloqueada e aparece como lacuna na tela de achados.
         </p>
       </div>
     </>
