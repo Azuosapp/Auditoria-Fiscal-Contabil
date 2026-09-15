@@ -576,6 +576,143 @@ export default async function RelatorioPage({
 }
 
 /**
+ * O caso concreto do erro.
+ *
+ * O total calculado não convence ninguém numa reunião; a nota 3001, emitida em
+ * 20/01, de R$ 625,00, que não está no SPED, convence — porque o cliente
+ * confere no sistema dele enquanto conversa. Por isso o exemplo vem em tabela,
+ * com número, chave e data, e não diluído numa frase.
+ */
+function Exemplos({
+  evidencias,
+}: {
+  evidencias: {
+    id: string;
+    tipo: string;
+    arquivo: string;
+    registro: string | null;
+    campo: string | null;
+    valor: string | null;
+    observacao: string | null;
+    documentoNumero: string | null;
+    chave: string | null;
+    dataDocumento: string | null;
+    participante: string | null;
+  }[];
+}) {
+  const exemplos = evidencias.filter((e) => e.tipo === "EXEMPLO");
+  const confrontos = evidencias.filter((e) => e.tipo === "CONFRONTO");
+  const contexto = evidencias.filter((e) => e.tipo === "CONTEXTO");
+
+  const temDocumento = exemplos.some((e) => e.documentoNumero);
+
+  return (
+    <>
+      {confrontos.length > 0 ? (
+        <div className="exemplo">
+          <div className="exemplo-titulo">Números confrontados</div>
+          <table>
+            <tbody>
+              {confrontos.map((e) => (
+                <tr key={e.id}>
+                  <td>
+                    <strong>{e.arquivo}</strong>
+                    {e.registro ? ` · registro ${e.registro}` : ""}
+                    {e.campo ? <div>{e.campo}</div> : null}
+                  </td>
+                  <td className="num" style={{ width: "42mm" }}>
+                    {e.valor}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {exemplos.length > 0 ? (
+        <div className="exemplo">
+          <div className="exemplo-titulo">
+            {temDocumento
+              ? `Exemplo do erro — documento(s) encontrado(s)`
+              : "Exemplo do erro encontrado"}
+          </div>
+
+          {temDocumento ? (
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: "18mm" }}>Documento</th>
+                  <th style={{ width: "20mm" }}>Emissão</th>
+                  <th>Chave de acesso</th>
+                  <th style={{ width: "26mm" }}>Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exemplos.map((e) => (
+                  <tr key={e.id}>
+                    <td>
+                      <strong>{e.documentoNumero ?? "—"}</strong>
+                    </td>
+                    <td>{e.dataDocumento ?? "—"}</td>
+                    <td className="chave">{e.chave ?? e.campo ?? "—"}</td>
+                    <td className="num">{e.valor ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <table>
+              <tbody>
+                {exemplos.map((e) => (
+                  <tr key={e.id}>
+                    <td>
+                      <strong>{e.campo ?? e.arquivo}</strong>
+                      {e.observacao ? <div>{e.observacao}</div> : null}
+                    </td>
+                    <td className="num" style={{ width: "42mm" }}>
+                      {e.valor}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* A origem fica no rodapé do bloco: o cliente precisa saber em que
+              arquivo conferir, mas isso não pode competir com o exemplo. */}
+          <div
+            style={{
+              fontSize: "7.5pt",
+              color: "var(--muted)",
+              padding: "1mm 2mm",
+              borderTop: "1px solid var(--border)",
+            }}
+          >
+            {[...new Set(exemplos.map((e) => e.arquivo))].join(" · ")}
+            {exemplos[0]?.observacao && temDocumento
+              ? ` — ${exemplos[0].observacao}`
+              : ""}
+          </div>
+        </div>
+      ) : null}
+
+      {contexto.length > 0 ? (
+        <div className="rel-obs">
+          {contexto
+            .map((e) =>
+              [e.arquivo, e.registro, e.campo, e.valor, e.observacao]
+                .filter(Boolean)
+                .join(" · "),
+            )
+            .join("; ")}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/**
  * Uma verificação do catálogo, com o seu resultado.
  *
  * O item existe mesmo quando nada foi encontrado: é a diferença entre "não há
@@ -687,16 +824,7 @@ function Verificacao({ item }: { item: ItemVerificado }) {
             </div>
           ) : null}
 
-          {a.evidencias.length > 0 ? (
-            <div className="rel-obs">
-              <strong>Origem:</strong>{" "}
-              {a.evidencias
-                .map((e) =>
-                  [e.arquivo, e.registro, e.observacao].filter(Boolean).join(" · "),
-                )
-                .join("; ")}
-            </div>
-          ) : null}
+          <Exemplos evidencias={a.evidencias} />
         </div>
       ))}
 

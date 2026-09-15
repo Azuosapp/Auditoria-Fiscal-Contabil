@@ -9,6 +9,15 @@ import type { Prisma, TipoDocumento } from "@prisma/client";
  */
 
 export interface Evidencia {
+  /**
+   * EXEMPLO é o caso concreto — esta nota, esta chave, este valor. É o que
+   * convence na reunião: "foi calculado" não move ninguém, "olhe a nota 3001,
+   * emitida em 20/01, de R$ 625,00, que não está no SPED" move.
+   *
+   * CONFRONTO são os dois números comparados; CONTEXTO é apoio (totais,
+   * quantidades, origem do arquivo).
+   */
+  tipo?: "EXEMPLO" | "CONFRONTO" | "CONTEXTO";
   documentoId?: string;
   arquivo: string;
   registro?: string;
@@ -16,6 +25,11 @@ export interface Evidencia {
   campo?: string;
   valor?: string;
   observacao?: string;
+  /** Identificação do documento fiscal, quando o exemplo é uma nota. */
+  documentoNumero?: string;
+  chave?: string;
+  dataDocumento?: string;
+  participante?: string;
 }
 
 export interface AchadoProduzido {

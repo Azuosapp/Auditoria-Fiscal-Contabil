@@ -509,3 +509,50 @@ body {
     page-break-after: avoid;
   }
 }
+
+/* ---------- Exemplo concreto do erro ----------
+   O que convence na reunião não é o total calculado: é a nota 3001, emitida
+   em 20/01, de R$ 625,00, que não está no SPED. O cliente confere no próprio
+   sistema dele enquanto conversa. */
+
+.exemplo {
+  margin-top: 2mm;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.exemplo-titulo {
+  background: #f8fafc;
+  padding: 1.2mm 2mm;
+  font-size: 7.5pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.exemplo table {
+  margin: 0;
+  font-size: 8pt;
+}
+
+.exemplo table th {
+  font-size: 7pt;
+  padding: 1mm 2mm;
+  background: #fff;
+}
+
+.exemplo table td {
+  padding: 1mm 2mm;
+}
+
+.exemplo .chave {
+  font-family: "SF Mono", Menlo, ui-monospace, monospace;
+  font-size: 7pt;
+  letter-spacing: -0.2px;
+  word-break: break-all;
+}

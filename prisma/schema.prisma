@@ -768,12 +768,24 @@ model Achado {
   @@index([competencia])
 }
 
+/// Para que serve cada evidência no relatório.
+enum TipoEvidencia {
+  /// O caso concreto: esta nota, esta chave, este valor. É o que convence o
+  /// cliente — "foi calculado" não move ninguém; "olhe a nota 3001" move.
+  EXEMPLO
+  /// O número confrontado, de onde saiu e quanto deu.
+  CONFRONTO
+  /// Contexto de apoio: totais, quantidades, origem do arquivo.
+  CONTEXTO
+}
+
 /// Rastro até o documento do cliente. Achado sem evidência não entra no relatório.
 model Evidencia {
   id       String @id @default(cuid())
   achadoId String
   achado   Achado @relation(fields: [achadoId], references: [id], onDelete: Cascade)
 
+  tipo        TipoEvidencia @default(CONTEXTO)
   documentoId String?
   arquivo     String
   registro    String?
@@ -782,7 +794,15 @@ model Evidencia {
   valor       String?
   observacao  String?
 
+  /// Identificação do documento fiscal no exemplo: número, série, chave, data.
+  /// Guardados em coluna própria para o relatório exibi-los em tabela.
+  documentoNumero String?
+  chave           String?
+  dataDocumento   String?
+  participante    String?
+
   @@index([achadoId])
+  @@index([achadoId, tipo])
 }
 
 // =====================================================================

@@ -55,22 +55,49 @@ async function b01NotasNaoEscrituradas(
   const competenciasComSped = await competenciasComEscrituracao(ctx.auditoriaId);
   if (competenciasComSped.size === 0) return [];
 
-  const naoEscrituradas = await prisma.notaFiscal.groupBy({
-    by: ["competencia"],
-    where: {
-      documento: { auditoriaId: ctx.auditoriaId },
-      origem: "XML_AUTORIZADO",
-      situacao: "AUTORIZADA",
-      direcao: "SAIDA",
-      escriturada: false,
-      competencia: { in: [...competenciasComSped] },
-    },
-    _count: { _all: true },
-    _sum: { valorTotal: true },
-  });
+  const filtro = {
+    documento: { auditoriaId: ctx.auditoriaId },
+    origem: "XML_AUTORIZADO" as const,
+    situacao: "AUTORIZADA" as const,
+    direcao: "SAIDA" as const,
+    escriturada: false,
+    competencia: { in: [...competenciasComSped] },
+  };
+
+  const [naoEscrituradas, exemplos] = await Promise.all([
+    prisma.notaFiscal.groupBy({
+      by: ["competencia"],
+      where: filtro,
+      _count: { _all: true },
+      _sum: { valorTotal: true },
+    }),
+    // As notas concretas. O relatório precisa mostrar QUAL nota faltou, com
+    // número, chave e data: é o que o cliente confere no próprio sistema dele.
+    prisma.notaFiscal.findMany({
+      where: filtro,
+      select: {
+        competencia: true,
+        numero: true,
+        serie: true,
+        chave: true,
+        dataEmissao: true,
+        valorTotal: true,
+        cnpjDestinatario: true,
+      },
+      orderBy: [{ competencia: "asc" }, { dataEmissao: "asc" }],
+    }),
+  ]);
+
+  const exemplosPorCompetencia = new Map<string, typeof exemplos>();
+  for (const e of exemplos) {
+    const lista = exemplosPorCompetencia.get(e.competencia) ?? [];
+    lista.push(e);
+    exemplosPorCompetencia.set(e.competencia, lista);
+  }
 
   return naoEscrituradas.map((g) => {
     const valor = g._sum.valorTotal ?? ZERO;
+    const daCompetencia = exemplosPorCompetencia.get(g.competencia) ?? [];
     return {
       codigo: "B01",
       competencia: g.competencia,
@@ -89,11 +116,31 @@ async function b01NotasNaoEscrituradas(
       // homologar, então a contagem é a do art. 173, I.
       declarado: false,
       evidencias: [
+        // Até 10 notas por competência: o suficiente para o cliente conferir
+        // sem transformar o relatório numa listagem de mil linhas.
+        ...daCompetencia.slice(0, 10).map((n) => ({
+          tipo: "EXEMPLO" as const,
+          arquivo: `XML autorizado · ausente no SPED ${mesAno(g.competencia)}`,
+          registro: "C100",
+          documentoNumero: `${n.numero}${n.serie ? `/${n.serie}` : ""}`,
+          chave: n.chave ?? undefined,
+          dataDocumento: n.dataEmissao.toLocaleDateString("pt-BR", {
+            timeZone: "UTC",
+          }),
+          participante: n.cnpjDestinatario ?? undefined,
+          valor: moeda(n.valorTotal),
+          observacao: "nota autorizada pela SEFAZ e não escriturada",
+        })),
         {
+          tipo: "CONTEXTO" as const,
           arquivo: `SPED Fiscal ${mesAno(g.competencia)}`,
           registro: "C100",
           observacao:
-            `${g._count._all} chave(s) de acesso autorizadas sem registro correspondente.`,
+            `${g._count._all} chave(s) de acesso autorizadas sem registro ` +
+            `correspondente` +
+            (daCompetencia.length > 10
+              ? `; as 10 primeiras estão detalhadas acima`
+              : ""),
         },
       ],
     };
@@ -120,7 +167,13 @@ async function b02ValorDivergente(
         situacao: "AUTORIZADA",
         chave: { not: null },
       },
-      select: { chave: true, numero: true, competencia: true, valorTotal: true },
+      select: {
+        chave: true,
+        numero: true,
+        competencia: true,
+        valorTotal: true,
+        dataEmissao: true,
+      },
     }),
     prisma.notaFiscal.findMany({
       where: {
@@ -134,9 +187,18 @@ async function b02ValorDivergente(
 
   const porChave = new Map(escrituradas.map((n) => [n.chave!, n.valorTotal]));
 
+  interface Divergente {
+    numero: string;
+    chave: string;
+    emissao: Date;
+    noXml: Prisma.Decimal;
+    noSped: Prisma.Decimal;
+    diferenca: Prisma.Decimal;
+  }
+
   const divergencias = new Map<
     string,
-    { quantidade: number; soma: Prisma.Decimal; exemplos: string[] }
+    { quantidade: number; soma: Prisma.Decimal; exemplos: Divergente[] }
   >();
 
   for (const xml of xmls) {
@@ -149,14 +211,19 @@ async function b02ValorDivergente(
     const atual = divergencias.get(xml.competencia) ?? {
       quantidade: 0,
       soma: ZERO,
-      exemplos: [],
+      exemplos: [] as Divergente[],
     };
     atual.quantidade += 1;
     atual.soma = atual.soma.plus(diferenca);
-    if (atual.exemplos.length < 5) {
-      atual.exemplos.push(
-        `nota ${xml.numero}: XML ${moeda(xml.valorTotal)} × escriturado ${moeda(noSped)}`,
-      );
+    if (atual.exemplos.length < 10) {
+      atual.exemplos.push({
+        numero: xml.numero,
+        chave: xml.chave!,
+        emissao: xml.dataEmissao,
+        noXml: xml.valorTotal,
+        noSped,
+        diferenca,
+      });
     }
     divergencias.set(xml.competencia, atual);
   }
@@ -175,9 +242,14 @@ async function b02ValorDivergente(
     valorExposicao: d.soma,
     declarado: true,
     evidencias: d.exemplos.map((e) => ({
-      arquivo: `SPED Fiscal ${mesAno(competencia)}`,
+      tipo: "EXEMPLO" as const,
+      arquivo: `XML × SPED Fiscal ${mesAno(competencia)}`,
       registro: "C100",
-      observacao: e,
+      documentoNumero: e.numero,
+      chave: e.chave,
+      dataDocumento: e.emissao.toLocaleDateString("pt-BR", { timeZone: "UTC" }),
+      valor: `XML ${moeda(e.noXml)} × escriturado ${moeda(e.noSped)}`,
+      observacao: `diferença de ${moeda(e.diferenca)}`,
     })),
   }));
 }
@@ -248,11 +320,17 @@ async function b03CanceladaEscriturada(
     valorExposicao: d.soma,
     declarado: true,
     evidencias: d.exemplos.map((n) => ({
+      tipo: "EXEMPLO" as const,
       arquivo: `SPED Fiscal ${mesAno(competencia)}`,
       registro: "C100",
       campo: "COD_SIT",
-      valor: "00 (normal)",
-      observacao: `nota ${n.numero}, chave ${n.chave} — cancelada na SEFAZ, protocolo ${
+      documentoNumero: n.numero,
+      chave: n.chave ?? undefined,
+      dataDocumento: chavesCanceladas
+        .get(n.chave!)
+        ?.dataEvento?.toLocaleDateString("pt-BR", { timeZone: "UTC" }),
+      valor: `${moeda(n.valorTotal)} · escriturada como "00 — normal"`,
+      observacao: `cancelada na SEFAZ, protocolo ${
         chavesCanceladas.get(n.chave!)?.protocolo ?? "não informado"
       }`,
     })),
@@ -342,16 +420,24 @@ async function b05ReceitaDivergenteEntreEscrituracoes(
         "essas exclusões antes de tratar como inconsistência.",
       evidencias: [
         {
+          tipo: "CONFRONTO" as const,
           arquivo: `SPED Fiscal ${mesAno(s.competencia)}`,
           registro: "C100",
+          campo: "soma das saídas escrituradas",
           valor: moeda(receitaFiscal),
-          observacao: "soma das saídas escrituradas",
         },
         {
+          tipo: "CONFRONTO" as const,
           arquivo: `EFD-Contribuições ${mesAno(s.competencia)}`,
           registro: "M210",
+          campo: "base de cálculo do PIS",
           valor: moeda(basePis),
-          observacao: "base de cálculo do PIS",
+        },
+        {
+          tipo: "CONFRONTO" as const,
+          arquivo: "Diferença apurada",
+          campo: "SPED Fiscal menos base de PIS",
+          valor: `${moeda(diferenca)} (${percentual.toFixed(1)}%)`,
         },
       ],
     });
@@ -432,14 +518,22 @@ async function b07ReceitaPgdasMenorQueReal(
         "operação não tributável antes de tratar como omissão.",
       evidencias: [
         {
+          tipo: "CONFRONTO" as const,
           arquivo: `PGDAS-D ${mesAno(d.competencia)}`,
-          campo: "receita bruta do período",
+          campo: "receita bruta declarada",
           valor: moeda(d.receitaBruta),
         },
         {
+          tipo: "CONFRONTO" as const,
           arquivo: "XMLs autorizados da competência",
+          campo: "soma das notas de saída autorizadas e não canceladas",
           valor: moeda(receitaReal),
-          observacao: "soma das notas de saída autorizadas e não canceladas",
+        },
+        {
+          tipo: "CONFRONTO" as const,
+          arquivo: "Diferença apurada",
+          campo: "receita real menos declarada",
+          valor: moeda(diferenca),
         },
       ],
     });
@@ -480,7 +574,13 @@ async function b10EscrituradaSemXml(
         situacao: "AUTORIZADA",
         chave: { not: null },
       },
-      select: { chave: true, numero: true, competencia: true, valorTotal: true },
+      select: {
+        chave: true,
+        numero: true,
+        competencia: true,
+        valorTotal: true,
+        dataEmissao: true,
+      },
     }),
     prisma.notaFiscal.findMany({
       where: {
@@ -496,7 +596,7 @@ async function b10EscrituradaSemXml(
 
   const porCompetencia = new Map<
     string,
-    { quantidade: number; soma: Prisma.Decimal; exemplos: string[] }
+    { quantidade: number; soma: Prisma.Decimal; exemplos: typeof escrituradas }
   >();
 
   for (const n of escrituradas) {
@@ -509,9 +609,7 @@ async function b10EscrituradaSemXml(
     };
     atual.quantidade += 1;
     atual.soma = atual.soma.plus(n.valorTotal);
-    if (atual.exemplos.length < 5) {
-      atual.exemplos.push(`nota ${n.numero}, chave ${n.chave} — ${moeda(n.valorTotal)}`);
-    }
+    if (atual.exemplos.length < 10) atual.exemplos.push(n);
     porCompetencia.set(n.competencia, atual);
   }
 
@@ -538,9 +636,14 @@ async function b10EscrituradaSemXml(
       "realmente não constar na SEFAZ. Enquanto isso, a auditoria está " +
       "incompleta nesta competência.",
     evidencias: d.exemplos.map((e) => ({
-      arquivo: `SPED Fiscal ${mesAno(competencia)}`,
+      tipo: "EXEMPLO" as const,
+      arquivo: `SPED Fiscal ${mesAno(competencia)} · XML não localizado`,
       registro: "C100",
-      observacao: e,
+      documentoNumero: e.numero,
+      chave: e.chave ?? undefined,
+      dataDocumento: e.dataEmissao.toLocaleDateString("pt-BR", { timeZone: "UTC" }),
+      valor: moeda(e.valorTotal),
+      observacao: "escriturada no SPED, sem documento eletrônico entre os arquivos",
     })),
   }));
 }

@@ -33,6 +33,124 @@ const ROTULO_CONFIANCA: Record<string, string> = {
 
 type AchadoComEvidencias = Achado & { evidencias: Evidencia[] };
 
+/**
+ * O caso concreto do erro.
+ *
+ * O total não convence: a nota 3001, emitida em 20/01, de R$ 625,00, que não
+ * está no SPED, convence — porque o cliente confere no sistema dele enquanto
+ * conversa. Fica aberto por padrão, não escondido atrás de "ver evidência":
+ * é a parte mais útil do achado.
+ */
+function ExemploDoErro({ evidencias }: { evidencias: Evidencia[] }) {
+  const exemplos = evidencias.filter((e) => e.tipo === "EXEMPLO");
+  const confrontos = evidencias.filter((e) => e.tipo === "CONFRONTO");
+  const contexto = evidencias.filter((e) => e.tipo === "CONTEXTO");
+
+  if (evidencias.length === 0) return null;
+
+  const temDocumento = exemplos.some((e) => e.documentoNumero);
+
+  return (
+    <div className="mt-2 space-y-2">
+      {confrontos.length > 0 ? (
+        <div className="overflow-hidden rounded-md border border-surface-border">
+          <div className="border-b border-surface-border bg-[#f8fafc] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.4px] text-content-muted">
+            Números confrontados
+          </div>
+          <table className="tbl !text-[10px]">
+            <tbody>
+              {confrontos.map((e) => (
+                <tr key={e.id}>
+                  <td>
+                    <span className="font-medium">{e.arquivo}</span>
+                    {e.registro ? (
+                      <span className="text-content-muted"> · {e.registro}</span>
+                    ) : null}
+                    {e.campo ? (
+                      <div className="text-[10px] text-content-muted">{e.campo}</div>
+                    ) : null}
+                  </td>
+                  <td className="num w-40 font-semibold">{e.valor}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {exemplos.length > 0 ? (
+        <div className="overflow-hidden rounded-md border border-surface-border">
+          <div className="border-b border-surface-border bg-[#f8fafc] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.4px] text-content-muted">
+            Exemplo do erro encontrado
+          </div>
+
+          <div className="max-h-64 overflow-y-auto">
+            {temDocumento ? (
+              <table className="tbl !text-[10px]">
+                <thead>
+                  <tr>
+                    <th className="w-24">Documento</th>
+                    <th className="w-24">Emissão</th>
+                    <th>Chave de acesso</th>
+                    <th className="w-28">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {exemplos.map((e) => (
+                    <tr key={e.id}>
+                      <td className="font-semibold">{e.documentoNumero ?? "—"}</td>
+                      <td>{e.dataDocumento ?? "—"}</td>
+                      <td className="break-all font-mono text-[9px]">
+                        {e.chave ?? e.campo ?? "—"}
+                      </td>
+                      <td className="num">{e.valor ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <table className="tbl !text-[10px]">
+                <tbody>
+                  {exemplos.map((e) => (
+                    <tr key={e.id}>
+                      <td>
+                        <span className="font-medium">{e.campo ?? e.arquivo}</span>
+                        {e.observacao ? (
+                          <div className="text-content-muted">{e.observacao}</div>
+                        ) : null}
+                      </td>
+                      <td className="num w-40 font-semibold">{e.valor}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="border-t border-surface-border px-2 py-1 text-[9px] text-content-muted">
+            {[...new Set(exemplos.map((e) => e.arquivo))].join(" · ")}
+            {temDocumento && exemplos[0]?.observacao
+              ? ` — ${exemplos[0].observacao}`
+              : ""}
+          </div>
+        </div>
+      ) : null}
+
+      {contexto.length > 0 ? (
+        <div className="text-[10px] text-content-muted">
+          {contexto
+            .map((e) =>
+              [e.arquivo, e.registro, e.campo, e.valor, e.observacao]
+                .filter(Boolean)
+                .join(" · "),
+            )
+            .join("; ")}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ListaAchados({
   achados,
   lacunas,
@@ -120,24 +238,7 @@ export function ListaAchados({
                 </p>
               ) : null}
 
-              {a.evidencias.length > 0 ? (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-[10px] font-semibold text-azuos-primary">
-                    Evidência ({a.evidencias.length})
-                  </summary>
-                  <ul className="mt-1 space-y-0.5 text-[10px] text-content-muted">
-                    {a.evidencias.map((e) => (
-                      <li key={e.id}>
-                        · <span className="font-mono">{e.arquivo}</span>
-                        {e.registro ? ` · registro ${e.registro}` : ""}
-                        {e.campo ? ` · ${e.campo}` : ""}
-                        {e.valor ? `: ${e.valor}` : ""}
-                        {e.observacao ? ` — ${e.observacao}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              ) : null}
+              <ExemploDoErro evidencias={a.evidencias} />
 
               <div className="mt-2 flex flex-wrap gap-3 text-[9px] text-content-muted">
                 <span>{a.baseLegal.join(" · ")}</span>

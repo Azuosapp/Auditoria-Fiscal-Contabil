@@ -90,16 +90,19 @@ async function d01Sublimite(ctx: ContextoRegra): Promise<AchadoProduzido[]> {
       declarado: true,
       evidencias: [
         {
+          tipo: "EXEMPLO" as const,
           arquivo: `PGDAS-D ${mesAno(a.competencia)}`,
           campo: "impedido de recolher ICMS/ISS no DAS",
-          valor: "sim",
+          valor: "sim — declarado pelo próprio extrato",
         },
         {
+          tipo: "CONFRONTO" as const,
           arquivo: `PGDAS-D ${mesAno(a.competencia)}`,
-          campo: "ICMS + ISS no DAS",
+          campo: "ICMS + ISS ainda recolhidos dentro do DAS",
           valor: moeda(dentroDoDas),
         },
         {
+          tipo: "CONTEXTO" as const,
           arquivo: `PGDAS-D ${mesAno(a.competencia)}`,
           campo: "RBT12",
           valor: moeda(a.rbt12),
@@ -168,6 +171,7 @@ async function d04PlanejamentoRecomendado(
       declarado: true,
       evidencias: [
         {
+          tipo: "CONTEXTO" as const,
           arquivo: "Apuração fiscal do período",
           observacao:
             `${apuracoes} competência(s) com apuração de ICMS lida — base do ` +
@@ -234,11 +238,13 @@ async function d02FatorR(ctx: ContextoRegra): Promise<AchadoProduzido[]> {
         "folha de pagamento dos 12 meses anteriores, ainda não importada.",
       evidencias: [
         {
+          tipo: "EXEMPLO" as const,
           arquivo: `PGDAS-D ${mesAno(a.competencia)}`,
-          campo: "fator R",
-          valor: `${fator.times(100).toFixed(2)}%`,
+          campo: "fator R declarado",
+          valor: `${fator.times(100).toFixed(2)}% (limiar: 28%)`,
         },
         {
+          tipo: "CONTEXTO" as const,
           arquivo: `PGDAS-D ${mesAno(a.competencia)}`,
           campo: "DAS do período",
           valor: moeda(a.valorDas),

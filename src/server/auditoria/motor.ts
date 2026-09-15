@@ -228,6 +228,7 @@ async function gravarAchados(
         ressalva: p.ressalva,
         evidencias: {
           create: p.evidencias.map((e) => ({
+            tipo: e.tipo ?? "CONTEXTO",
             documentoId: e.documentoId,
             arquivo: e.arquivo,
             registro: e.registro,
@@ -235,6 +236,10 @@ async function gravarAchados(
             campo: e.campo,
             valor: e.valor,
             observacao: e.observacao,
+            documentoNumero: e.documentoNumero,
+            chave: e.chave,
+            dataDocumento: e.dataDocumento,
+            participante: e.participante,
           })),
         },
       },

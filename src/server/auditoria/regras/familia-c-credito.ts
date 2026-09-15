@@ -94,7 +94,7 @@ async function c01CreditoSobreItemSemDireito(
 
   const porCompetencia = new Map<
     string,
-    { quantidade: number; soma: Prisma.Decimal; exemplos: string[] }
+    { quantidade: number; soma: Prisma.Decimal; exemplos: typeof itensEntrada }
   >();
 
   for (const item of itensEntrada) {
@@ -102,17 +102,11 @@ async function c01CreditoSobreItemSemDireito(
     const atual = porCompetencia.get(c) ?? {
       quantidade: 0,
       soma: ZERO,
-      exemplos: [],
+      exemplos: [] as typeof itensEntrada,
     };
     atual.quantidade += 1;
     atual.soma = atual.soma.plus(item.valorItem);
-    if (atual.exemplos.length < 5) {
-      atual.exemplos.push(
-        `nota ${item.nota.numero}: ${item.descricao ?? "item"} — ` +
-          `CST PIS ${item.cstPis ?? "-"} / COFINS ${item.cstCofins ?? "-"}, ` +
-          `${moeda(item.valorItem)}`,
-      );
-    }
+    if (atual.exemplos.length < 10) atual.exemplos.push(item);
     porCompetencia.set(c, atual);
   }
 
@@ -145,11 +139,22 @@ async function c01CreditoSobreItemSemDireito(
           "na mesma competência. Confirmar item a item no bloco de créditos da " +
           "EFD-Contribuições antes de tratar como crédito indevido — o valor " +
           "apontado é o das compras, não o do crédito glosável.",
-        evidencias: d.exemplos.map((e) => ({
-          arquivo: `Documentos de entrada de ${mesAno(competencia)}`,
-          campo: "CST de PIS/COFINS",
-          observacao: e,
-        })),
+        evidencias: [
+          ...d.exemplos.map((item) => ({
+            tipo: "EXEMPLO" as const,
+            arquivo: `Documento de entrada · ${mesAno(competencia)}`,
+            documentoNumero: item.nota.numero,
+            campo: `CST PIS ${item.cstPis ?? "—"} / COFINS ${item.cstCofins ?? "—"}`,
+            valor: moeda(item.valorItem),
+            observacao: item.descricao ?? "item sem descrição no XML",
+          })),
+          {
+            tipo: "CONFRONTO" as const,
+            arquivo: `EFD-Contribuições ${mesAno(competencia)}`,
+            campo: "crédito apropriado na competência",
+            valor: moeda(creditoApropriado),
+          },
+        ],
       };
     });
 }

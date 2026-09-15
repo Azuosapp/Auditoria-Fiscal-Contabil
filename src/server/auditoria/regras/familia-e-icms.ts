@@ -60,7 +60,7 @@ async function e05CoerenciaCfopCst(
 
   const porCompetencia = new Map<
     string,
-    { quantidade: number; soma: Prisma.Decimal; exemplos: string[] }
+    { quantidade: number; soma: Prisma.Decimal; exemplos: typeof itens }
   >();
 
   for (const item of itens) {
@@ -81,16 +81,11 @@ async function e05CoerenciaCfopCst(
     const atual = porCompetencia.get(c) ?? {
       quantidade: 0,
       soma: ZERO,
-      exemplos: [],
+      exemplos: [] as typeof itens,
     };
     atual.quantidade += 1;
     atual.soma = atual.soma.plus(item.valorItem);
-    if (atual.exemplos.length < 5) {
-      atual.exemplos.push(
-        `nota ${item.nota.numero}: CFOP ${cfop} com destino ${ufDestino} ` +
-          `(empresa em ${ufEmpresa})`,
-      );
-    }
+    if (atual.exemplos.length < 10) atual.exemplos.push(item);
     porCompetencia.set(c, atual);
   }
 
@@ -114,10 +109,16 @@ async function e05CoerenciaCfopCst(
       "A UF de destino considerada é a do endereço do destinatário no XML. " +
       "Operações com entrega em endereço diverso do destinatário podem ser " +
       "legítimas e precisam ser conferidas individualmente.",
-    evidencias: d.exemplos.map((e) => ({
-      arquivo: `XMLs de ${mesAno(competencia)}`,
+    evidencias: d.exemplos.map((item) => ({
+      tipo: "EXEMPLO" as const,
+      arquivo: `XML de ${mesAno(competencia)}`,
+      documentoNumero: item.nota.numero,
       campo: "CFOP × UF do destinatário",
-      observacao: e,
+      valor: `CFOP ${item.cfop} · destino ${item.nota.ufDestino} · ${moeda(item.valorItem)}`,
+      observacao:
+        item.cfop?.[0] === "5"
+          ? `CFOP de operação interna, mas o destinatário está em ${item.nota.ufDestino} e a empresa em ${ufEmpresa}`
+          : `CFOP interestadual, mas o destinatário está na mesma UF da empresa (${ufEmpresa})`,
     })),
   }));
 }
