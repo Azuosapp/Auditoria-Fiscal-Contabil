@@ -1,0 +1,54 @@
+<?xml version='1.0' encoding='iso-8859-1'?>
+<ApuracaoDebitosDctf>
+  <dtApuracaoDebitos>20250703</dtApuracaoDebitos>
+  <versaoLeiaute>1.0</versaoLeiaute>
+  <codSistemaUsuario>8</codSistemaUsuario>
+  <indTransImediata>N</indTransImediata>
+  <permitirCodAcesso>N</permitirCodAcesso>
+  <DadosIdentificadoresContribuinte>
+    <tipoInscricao>1</tipoInscricao>
+    <inscContrib>12345678000199</inscContrib>
+    <perApuracao>062025</perApuracao>
+    <clasTrib>99</clasTrib>
+    <naturezaJuridica>2062</naturezaJuridica>
+    <indOrgEstrang>0</indOrgEstrang>
+    <indConteudo>1</indConteudo>
+    <indZerada>1</indZerada>
+    <identEfd>8064187</identEfd>
+    <categoriaDctf>40</categoriaDctf>
+  </DadosIdentificadoresContribuinte>
+  <DadosContatoContribuinte>
+    <contatoNome>FULANO DE TAL</contatoNome>
+    <contatoCpf>00000000191</contatoCpf>
+    <contatoCrc>000000</contatoCrc>
+    <contatoUfCrc>GO</contatoUfCrc>
+    <contatoTelefone>6200000000</contatoTelefone>
+    <contatoEmail>contato@exemplo.com.br</contatoEmail>
+  </DadosContatoContribuinte>
+  <DebitosApurados>
+    <DebitoApurado>
+      <codTrib>512301</codTrib>
+      <ctValor>2795.48</ctValor>
+      <paDebito>062025</paDebito>
+      <municipioDebito>5201108</municipioDebito>
+      <ctCnpjDebito>12345678000199</ctCnpjDebito>
+    </DebitoApurado>
+    <DebitoApurado>
+      <codTrib>691201</codTrib>
+      <ctValor>2259.52</ctValor>
+      <paDebito>062025</paDebito>
+    </DebitoApurado>
+    <DebitoApurado>
+      <codTrib>585601</codTrib>
+      <ctValor>10407.48</ctValor>
+      <paDebito>062025</paDebito>
+    </DebitoApurado>
+  </DebitosApurados>
+  <DadosIdentificadoresApuracaoMit>
+    <qualificacaoPj>8</qualificacaoPj>
+    <formaTributacao>1</formaTributacao>
+    <crvm>2</crvm>
+    <regimePisCofins>1</regimePisCofins>
+    <pjLevantouBalancoBalancete>0</pjLevantouBalancoBalancete>
+  </DadosIdentificadoresApuracaoMit>
+</ApuracaoDebitosDctf>

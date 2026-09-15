@@ -13,6 +13,7 @@ import {
   type ResultadoIdentificacao,
 } from "@/server/extraction/identificar-empresa";
 import { parseExtratoPgdas, ehExtratoPgdas } from "@/server/extraction/pgdas-extrato";
+import { parseApuracaoDctf } from "@/server/extraction/dctf-mit";
 
 /**
  * Análise do lote recém-recebido, ANTES de existir empresa ou auditoria.
@@ -256,6 +257,26 @@ async function analisarArquivo(
         }
       } catch (e) {
         aviso = `XML ilegível: ${(e as Error).message}`;
+      }
+      break;
+    }
+
+    case "DCTF": {
+      // A DCTF identifica o contribuinte pelo próprio CNPJ declarado e traz o
+      // período de apuração: serve para criar a empresa e para ampliar a
+      // janela da auditoria, como um SPED.
+      const apuracao = parseApuracaoDctf(buffer);
+      if (apuracao?.cnpj) {
+        coletor.registrarEscrituracao({ cnpj: apuracao.cnpj });
+      }
+      if (apuracao?.competencia) coletor.registrarCompetencia(apuracao.competencia);
+      // Débito de período anterior confessado numa apuração posterior amplia a
+      // janela para trás — é competência auditável como qualquer outra.
+      for (const d of apuracao?.debitos ?? []) {
+        coletor.registrarCompetencia(d.competencia);
+      }
+      if (apuracao && apuracao.debitos.length === 0) {
+        aviso = "DCTF sem débito confessado.";
       }
       break;
     }

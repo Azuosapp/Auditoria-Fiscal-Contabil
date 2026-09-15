@@ -161,7 +161,7 @@ async function fontesComDadoExtraido(
   // Pacote .zip entra como DESCONHECIDO, mas o que ele produziu foi gravado sob
   // o próprio documento. Se houve extração, as fontes reais vêm do que existe
   // no banco — daí a conferência abaixo.
-  const [temNota, temApuracaoIcms, temContrib, temSimples, temEvento] =
+  const [temNota, temApuracaoIcms, temContrib, temSimples, temEvento, temConfissao] =
     await Promise.all([
       prisma.notaFiscal.count({
         where: { documento: { auditoriaId }, origem: "XML_AUTORIZADO" },
@@ -170,6 +170,7 @@ async function fontesComDadoExtraido(
       prisma.apuracaoContribuicoes.count({ where: { documento: { auditoriaId } } }),
       prisma.apuracaoSimples.count({ where: { documento: { auditoriaId } } }),
       prisma.eventoNfe.count({ where: { documento: { auditoriaId } } }),
+      prisma.confissao.count({ where: { documento: { auditoriaId } } }),
     ]);
 
   if (temNota > 0) fontes.add("NFE_XML");
@@ -177,6 +178,7 @@ async function fontesComDadoExtraido(
   if (temContrib > 0) fontes.add("SPED_CONTRIBUICOES");
   if (temSimples > 0) fontes.add("PGDAS");
   if (temEvento > 0) fontes.add("EVENTO_NFE");
+  if (temConfissao > 0) fontes.add("DCTF");
 
   const escrituradas = await prisma.notaFiscal.count({
     where: { documento: { auditoriaId }, origem: "ESCRITURACAO" },

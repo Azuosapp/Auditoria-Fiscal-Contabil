@@ -10,6 +10,7 @@ import {
 } from "@/server/extraction/sped-contribuicoes";
 import { parseExtratoPgdas, ehExtratoPgdas } from "@/server/extraction/pgdas-extrato";
 import { parseSituacaoFiscal } from "@/server/extraction/situacao-fiscal";
+import { parseApuracaoDctf } from "@/server/extraction/dctf-mit";
 import { pdfBufferParaTexto } from "@/server/extraction/pdf-texto";
 import { decodeTextBuffer } from "@/server/extraction/encoding";
 import { ehZip } from "@/server/extraction/zip";
@@ -21,6 +22,7 @@ import {
   persistirApuracaoIcms,
   persistirEventos,
   persistirNotas,
+  persistirDctf,
   persistirPgdas,
   persistirSituacaoFiscal,
   reconciliar,
@@ -50,7 +52,6 @@ export interface ResultadoProcessamento {
 const SEM_PARSER: Partial<Record<TipoDocumento, string>> = {
   ECD: "Parser de ECD (SPED Contábil) ainda não implementado.",
   ECF: "Parser de ECF ainda não implementado.",
-  DCTF: "Parser de DCTF ainda não implementado.",
   DCTFWEB: "Parser de DCTFWeb ainda não implementado.",
   COMPROVANTE_ARRECADACAO:
     "Parser de comprovante de arrecadação (DARF/DAS/DARE) ainda não implementado.",
@@ -263,6 +264,7 @@ async function processarDocumento(
         apuracoesSimples: contagem.apuracoesSimples,
         eventos: contagem.eventos,
         pendenciasFiscais: contagem.pendenciasFiscais,
+        confissoes: contagem.confissoes,
       },
     },
   });
@@ -375,6 +377,26 @@ async function processarUnico(
       if (contagem.pendenciasFiscais === 0) contagem.pendenciasFiscais = 1;
 
       return { parser: "situacao-fiscal", contagem, avisos: extraida.avisos };
+    }
+
+    case "DCTF": {
+      const apuracao = parseApuracaoDctf(buffer);
+      if (!apuracao) {
+        return {
+          parser: "dctf-mit",
+          contagem: contagemVazia(),
+          avisos: [
+            "O arquivo não tem a estrutura da apuração de débitos da DCTF " +
+              "(elemento ApuracaoDebitosDctf).",
+          ],
+        };
+      }
+
+      const contagem = contagemVazia();
+      contagem.confissoes = await prisma.$transaction((tx) =>
+        persistirDctf(tx, documentoId, apuracao),
+      );
+      return { parser: "dctf-mit", contagem, avisos: apuracao.avisos };
     }
 
     case "PGDAS": {

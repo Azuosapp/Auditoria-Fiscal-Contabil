@@ -109,6 +109,17 @@ function classificarXml(amostra: string): Classificacao | null {
     return { tipo: "NFSE_XML", motivo: "NFS-e", seguro: true };
   }
 
+  // XML de apuração da DCTF (MIT). Vem do sistema do contribuinte, com os
+  // débitos confessados por código de receita — o lado "confessado" da
+  // família A.
+  if (/<\s*ApuracaoDebitosDctf[\s>]/i.test(amostra)) {
+    return {
+      tipo: "DCTF",
+      motivo: "apuração de débitos da DCTF (MIT)",
+      seguro: true,
+    };
+  }
+
   if (/<\s*(\w+:)?(eSocial|evtRemun|evtInfoEmpregador)/i.test(amostra)) {
     return { tipo: "ESOCIAL", motivo: "evento do eSocial", seguro: true };
   }

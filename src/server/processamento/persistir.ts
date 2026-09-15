@@ -6,6 +6,7 @@ import type {
   ParsedApuracao,
 } from "@/server/extraction/types";
 import type { ExtractionResultSpedContribuicoes } from "@/server/extraction/sped-contribuicoes";
+import type { ApuracaoDctf } from "@/server/extraction/dctf-mit";
 import type { ExtratoPgdas } from "@/server/extraction/pgdas-extrato";
 import type { SituacaoFiscalExtraida } from "@/server/extraction/situacao-fiscal";
 import { paraCompetencia } from "@/server/extraction/identificar-empresa";
@@ -30,6 +31,8 @@ export interface ContagemPersistida {
   apuracoesSimples: number;
   eventos: number;
   pendenciasFiscais: number;
+  /** Débitos confessados em DCTF. */
+  confissoes: number;
 }
 
 export function contagemVazia(): ContagemPersistida {
@@ -41,6 +44,7 @@ export function contagemVazia(): ContagemPersistida {
     apuracoesSimples: 0,
     eventos: 0,
     pendenciasFiscais: 0,
+    confissoes: 0,
   };
 }
 
@@ -56,6 +60,7 @@ export function somarContagens(
     apuracoesSimples: a.apuracoesSimples + b.apuracoesSimples,
     eventos: a.eventos + b.eventos,
     pendenciasFiscais: a.pendenciasFiscais + b.pendenciasFiscais,
+    confissoes: a.confissoes + b.confissoes,
   };
 }
 
@@ -66,7 +71,8 @@ export function totalDe(c: ContagemPersistida): number {
     c.apuracoesContribuicoes +
     c.apuracoesSimples +
     c.eventos +
-    c.pendenciasFiscais
+    c.pendenciasFiscais +
+    c.confissoes
   );
 }
 
@@ -382,6 +388,42 @@ function somarRetencoes(
 ): Prisma.Decimal | undefined {
   if (!a && !b) return undefined;
   return (a ?? new Prisma.Decimal(0)).plus(b ?? new Prisma.Decimal(0));
+}
+
+/**
+ * Débitos confessados na DCTF.
+ *
+ * Grava um registro por débito, com o código de receita preservado: é ele que
+ * permite conferir o tributo na tabela da Receita e é ele que amarra a
+ * confissão ao DARF correspondente, quando o comprovante de arrecadação
+ * também for importado.
+ *
+ * A chave de unicidade é documento + competência + código, e não apenas
+ * documento + competência: uma mesma DCTF confessa IPI, PIS e COFINS do mesmo
+ * mês, e colapsá-los perderia dois dos três.
+ */
+export async function persistirDctf(
+  tx: Prisma.TransactionClient,
+  documentoId: string,
+  apuracao: ApuracaoDctf,
+): Promise<number> {
+  // Reimportação do mesmo arquivo reescreve o conjunto inteiro: débito que
+  // saiu da retificadora não pode continuar no confronto.
+  await tx.confissao.deleteMany({ where: { documentoId } });
+
+  for (const d of apuracao.debitos) {
+    await tx.confissao.create({
+      data: {
+        documentoId,
+        competencia: d.competencia,
+        tributo: d.tributo,
+        codigoReceita: d.codigoReceita,
+        valorDebito: d.valor,
+      },
+    });
+  }
+
+  return apuracao.debitos.length;
 }
 
 export async function persistirPgdas(
