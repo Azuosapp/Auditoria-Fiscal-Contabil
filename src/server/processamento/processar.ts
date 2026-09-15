@@ -13,7 +13,7 @@ import { parseSituacaoFiscal } from "@/server/extraction/situacao-fiscal";
 import { pdfBufferParaTexto } from "@/server/extraction/pdf-texto";
 import { decodeTextBuffer } from "@/server/extraction/encoding";
 import { ehZip } from "@/server/extraction/zip";
-import { classificar } from "@/server/extraction/classificar";
+import { classificar, classificarPdf } from "@/server/extraction/classificar";
 import type { ExtractionResult } from "@/server/extraction/types";
 import {
   contagemVazia,
@@ -57,6 +57,12 @@ const SEM_PARSER: Partial<Record<TipoDocumento, string>> = {
   ESOCIAL: "Parser de eSocial ainda não implementado.",
   EFD_REINF: "Parser de EFD-Reinf ainda não implementado.",
   CARTAO_CNPJ: "Cartão CNPJ é guardado para consulta; não há extração automática.",
+  CERTIDAO:
+    "Certidão de débitos guardada para consulta. A leitura automática não é feita: " +
+    "o que vale para a auditoria é o Relatório de Situação Fiscal, que detalha cada pendência.",
+  INSCRICAO_ESTADUAL: "Documento cadastral guardado para consulta.",
+  RECIBO_ENTREGA:
+    "Recibo de transmissão. Comprova a entrega da escrituração, mas não traz dado fiscal.",
   CONTRATO_SOCIAL: "Contrato social é guardado para consulta; não há extração automática.",
   PLANILHA: "Planilha exige mapeamento de contas; não é processada automaticamente.",
   DESCONHECIDO: "Conteúdo não reconhecido.",
@@ -102,20 +108,40 @@ export async function processarAuditoria(
   const erros: { documento: string; mensagem: string }[] = [];
 
   for (const doc of pendentes) {
-    const motivoSemParser = SEM_PARSER[doc.tipo];
-
     try {
       const buffer = await readFile(doc.caminho);
 
       // Pacote: o documento registrado é o .zip, mas o conteúdo é que importa.
       const ehPacote = ehZip(buffer) && doc.tipo === "DESCONHECIDO";
 
-      if (motivoSemParser && !ehPacote) {
+      // Reclassifica o que ficou como DESCONHECIDO numa importação anterior.
+      // A classificação melhora com o tempo — reconhecer um novo leiaute não
+      // pode obrigar o usuário a reimportar centenas de megabytes.
+      if (doc.tipo === "DESCONHECIDO" && !ehPacote) {
+        const novoTipo = await reclassificar(buffer, doc.nomeArquivo);
+        if (novoTipo && novoTipo.tipo !== "DESCONHECIDO") {
+          await prisma.documento.update({
+            where: { id: doc.id },
+            data: {
+              tipo: novoTipo.tipo,
+              metadados: {
+                motivoClassificacao: novoTipo.motivo,
+                classificacaoSegura: novoTipo.seguro,
+                reclassificado: true,
+              },
+            },
+          });
+          doc.tipo = novoTipo.tipo;
+        }
+      }
+
+      const motivoAtualizado = SEM_PARSER[doc.tipo];
+      if (motivoAtualizado && !ehPacote) {
         await prisma.documento.update({
           where: { id: doc.id },
           data: {
             status: "IGNORADO",
-            erros: [motivoSemParser] as Prisma.InputJsonValue,
+            erros: [motivoAtualizado] as Prisma.InputJsonValue,
             processadoEm: new Date(),
           },
         });
@@ -160,6 +186,25 @@ export async function processarAuditoria(
   });
 
   return { processados, comErro, ignorados, registros, reconciliacao, erros };
+}
+
+/**
+ * Nova tentativa de classificar um documento que ficou como DESCONHECIDO.
+ *
+ * Para PDF, extrai o texto e classifica por ele — e, quando o PDF é digitalizado
+ * e não tem texto, cai na dedução pelo nome, declarada como insegura.
+ */
+async function reclassificar(buffer: Buffer, nomeArquivo: string) {
+  if (buffer.subarray(0, 5).toString("latin1") === "%PDF-") {
+    try {
+      const texto = await pdfBufferParaTexto(buffer);
+      return classificarPdf(texto, nomeArquivo);
+    } catch {
+      // PDF ilegível continua desconhecido; o erro já aparece no documento.
+      return null;
+    }
+  }
+  return classificar(buffer, nomeArquivo);
 }
 
 async function processarDocumento(

@@ -206,7 +206,7 @@ async function analisarArquivo(
   if (tipo === "DESCONHECIDO" && motivo.startsWith("PDF")) {
     try {
       const texto = await pdfBufferParaTexto(buffer);
-      const cls = classificarPdf(texto);
+      const cls = classificarPdf(texto, nome);
       tipo = cls.tipo;
       motivo = cls.motivo;
       seguro = cls.seguro;

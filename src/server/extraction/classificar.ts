@@ -54,6 +54,17 @@ export function classificar(buffer: Buffer, nomeArquivo: string): Classificacao 
 
   const amostra = decodeTextBuffer(buffer.subarray(0, AMOSTRA_BYTES)).text;
 
+  // Recibo de entrega de escrituração (.rec do SPED): linha única começando em
+  // "RCP", com hashes. Não tem dado fiscal, mas é o comprovante de transmissão —
+  // vale guardar identificado, em vez de ficar como "não reconhecido".
+  if (/^RCP\d{2}\d{14}/.test(amostra.trim())) {
+    return {
+      tipo: "RECIBO_ENTREGA",
+      motivo: "recibo de entrega de escrituração (SPED)",
+      seguro: true,
+    };
+  }
+
   const xml = classificarXml(amostra);
   if (xml) return xml;
 
@@ -176,14 +187,57 @@ function classificarSped(amostra: string): Classificacao | null {
  * Separada da função principal porque extrair texto de PDF custa um processo
  * externo (`pdftotext`) — só vale a pena para o que já se sabe ser PDF.
  */
-export function classificarPdf(texto: string): Classificacao {
-  const t = texto.toUpperCase();
+export function classificarPdf(
+  texto: string,
+  nomeArquivo = "",
+): Classificacao {
+  /**
+   * PDF digitalizado não tem texto para ler.
+   *
+   * Acontece o tempo todo com certidão, cartão CNPJ e inscrição estadual: o
+   * cliente imprime e escaneia, ou o portal entrega uma imagem. Dizer "conteúdo
+   * não reconhecido" faz parecer erro do sistema ou formato exótico; o certo é
+   * dizer que é imagem e que leitura automática exigiria OCR.
+   *
+   * Nesse caso, e SÓ nesse caso, o nome do arquivo é usado para classificar —
+   * marcado como não seguro. É o único sinal disponível, e deixar o documento
+   * catalogado é melhor que perdê-lo numa pilha de "desconhecidos".
+   */
+  if (texto.trim().length < 40) {
+    const porNome = classificarPeloNome(nomeArquivo);
+    return {
+      tipo: porNome?.tipo ?? "DESCONHECIDO",
+      motivo: porNome
+        ? `${porNome.rotulo} — deduzido pelo NOME do arquivo: o PDF está ` +
+          `digitalizado (sem texto) e não pode ser lido automaticamente`
+        : "PDF digitalizado (sem texto). A leitura automática exigiria OCR.",
+      seguro: false,
+    };
+  }
 
-  if (/EXTRATO DO SIMPLES NACIONAL|PGDAS-?D|PERÍODO DE APURAÇÃO.*SIMPLES/.test(t)) {
+  /**
+   * Comparação sem acento, de propósito.
+   *
+   * O PDF do e-CAC vem em Latin-1 e o acento às vezes chega corrompido na
+   * extração. Casar "SITUAÇÃO" exigiria que a decodificação tivesse dado certo;
+   * casar "SITUACAO" funciona nos dois casos.
+   */
+  const t = texto
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase();
+
+  if (/EXTRATO DO SIMPLES NACIONAL|PGDAS-?D|PERIODO DE APURACAO.*SIMPLES/.test(t)) {
     return { tipo: "PGDAS", motivo: "extrato do Simples Nacional (PGDAS-D)", seguro: true };
   }
 
-  if (/RELATÓRIO DE SITUAÇÃO FISCAL|SITUAÇÃO FISCAL|DIAGNÓSTICO FISCAL/.test(t)) {
+  // "Informações de apoio para emissão de certidão" é o título oficial do
+  // relatório; "Diagnóstico Fiscal" encabeça as seções de pendência.
+  if (
+    /INFORMACOES DE APOIO PARA EMISSAO DE CERTIDAO|RELATORIO DE SITUACAO FISCAL|SITUACAO FISCAL|DIAGNOSTICO FISCAL/.test(
+      t,
+    )
+  ) {
     return {
       tipo: "SITUACAO_FISCAL",
       motivo: "relatório de situação fiscal do e-CAC",
@@ -191,7 +245,7 @@ export function classificarPdf(texto: string): Classificacao {
     };
   }
 
-  if (/DOCUMENTO DE ARRECADAÇÃO|DARF|DOCUMENTO DE ARRECADA|GNRE|DARE/.test(t)) {
+  if (/DOCUMENTO DE ARRECADACAO|DARF|GNRE|DARE/.test(t)) {
     return {
       tipo: "COMPROVANTE_ARRECADACAO",
       motivo: "documento de arrecadação",
@@ -202,17 +256,85 @@ export function classificarPdf(texto: string): Classificacao {
   if (/DCTFWEB|DCTF WEB/.test(t)) {
     return { tipo: "DCTFWEB", motivo: "DCTFWeb", seguro: true };
   }
-  if (/DCTF|DECLARAÇÃO DE DÉBITOS E CRÉDITOS/.test(t)) {
+  if (/DCTF|DECLARACAO DE DEBITOS E CREDITOS/.test(t)) {
     return { tipo: "DCTF", motivo: "DCTF", seguro: true };
   }
 
-  if (/COMPROVANTE DE INSCRIÇÃO E DE SITUAÇÃO CADASTRAL/.test(t)) {
+  if (/COMPROVANTE DE INSCRICAO E DE SITUACAO CADASTRAL/.test(t)) {
     return { tipo: "CARTAO_CNPJ", motivo: "cartão CNPJ", seguro: true };
   }
 
-  if (/CONTRATO SOCIAL|ALTERAÇÃO CONTRATUAL/.test(t)) {
+  // Certidão de débitos. Positiva e "positiva com efeito de negativa" importam
+  // tanto quanto a negativa: a primeira indica débito exigível, a segunda
+  // débito com exigibilidade suspensa.
+  if (/CERTIDAO (NEGATIVA|POSITIVA)|CERTIDAO DE REGULARIDADE|DEBITOS RELATIVOS AOS TRIBUTOS/.test(t)) {
+    const positiva = /CERTIDAO POSITIVA/.test(t);
+    const comEfeito = /EFEITOS? DE NEGATIVA/.test(t);
+    return {
+      tipo: "CERTIDAO",
+      motivo: positiva
+        ? comEfeito
+          ? "certidão positiva com efeito de negativa (débito com exigibilidade suspensa)"
+          : "certidão POSITIVA de débitos"
+        : "certidão negativa de débitos",
+      seguro: true,
+    };
+  }
+
+  if (/CONTRATO SOCIAL|ALTERACAO CONTRATUAL/.test(t)) {
     return { tipo: "CONTRATO_SOCIAL", motivo: "contrato social", seguro: true };
   }
 
+  const porNome = classificarPeloNome(nomeArquivo);
+  if (porNome) {
+    return {
+      tipo: porNome.tipo,
+      motivo: `${porNome.rotulo} — deduzido pelo nome do arquivo`,
+      seguro: false,
+    };
+  }
+
   return { tipo: "DESCONHECIDO", motivo: "PDF de conteúdo não reconhecido", seguro: true };
+}
+
+/**
+ * Classificação pelo NOME do arquivo — último recurso.
+ *
+ * Só entra quando o conteúdo não diz nada: PDF digitalizado, ou texto que não
+ * casa com nenhum padrão conhecido. O resultado sempre sai marcado como não
+ * seguro, porque nome de arquivo é escolha de quem salvou e não prova nada.
+ */
+export function classificarPeloNome(
+  nome: string,
+): { tipo: TipoDocumento; rotulo: string } | null {
+  const n = nome
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase();
+
+  if (/\bCND\b|CERTIDAO|CPEND/.test(n)) {
+    return { tipo: "CERTIDAO", rotulo: "certidão de débitos" };
+  }
+  if (/CARTAO\s*CNPJ|COMPROVANTE.*CNPJ/.test(n)) {
+    return { tipo: "CARTAO_CNPJ", rotulo: "cartão CNPJ" };
+  }
+  if (/INSCRICAO\s*ESTADUAL|CADASTRO\s*ESTADUAL/.test(n)) {
+    return { tipo: "INSCRICAO_ESTADUAL", rotulo: "inscrição estadual" };
+  }
+  if (/CONTRATO\s*SOCIAL|ALTERACAO\s*CONTRATUAL/.test(n)) {
+    return { tipo: "CONTRATO_SOCIAL", rotulo: "contrato social" };
+  }
+  if (/SITUACAO\s*FISCAL|RELATORIO.*FISCAL/.test(n)) {
+    return { tipo: "SITUACAO_FISCAL", rotulo: "relatório de situação fiscal" };
+  }
+  if (/\bDARF\b|\bDAS\b|\bDARE\b|\bGNRE\b|ARRECADACAO|COMPROVANTE.*PAGAMENTO/.test(n)) {
+    return { tipo: "COMPROVANTE_ARRECADACAO", rotulo: "comprovante de arrecadação" };
+  }
+  if (/\bDCTFWEB\b/.test(n)) return { tipo: "DCTFWEB", rotulo: "DCTFWeb" };
+  if (/\bDCTF\b/.test(n)) return { tipo: "DCTF", rotulo: "DCTF" };
+  if (/\bPGDAS\b|EXTRATO.*SIMPLES/.test(n)) {
+    return { tipo: "PGDAS", rotulo: "extrato do PGDAS-D" };
+  }
+
+  return null;
 }

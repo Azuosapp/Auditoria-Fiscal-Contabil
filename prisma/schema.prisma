@@ -219,6 +219,12 @@ enum TipoDocumento {
   EFD_REINF
   CARTAO_CNPJ
   CONTRATO_SOCIAL
+  /// Certidão de débitos (CND, CPEN-D) federal, estadual ou municipal.
+  CERTIDAO
+  INSCRICAO_ESTADUAL
+  /// Recibo de entrega de escrituração (.rec). Guardado como comprovante de
+  /// transmissão; não carrega dado fiscal.
+  RECIBO_ENTREGA
   PLANILHA
   DESCONHECIDO
 }

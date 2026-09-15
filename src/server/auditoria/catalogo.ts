@@ -382,17 +382,34 @@ const FAMILIA_D: DefinicaoAchado[] = [
   {
     codigo: "D04",
     area: "FISCAL",
-    titulo: "Regime tributário mais caro que a alternativa disponível",
+    titulo: "Planejamento tributário recomendado",
     familia: "REGIME",
     severidade: "OPORTUNIDADE",
     tributo: null,
     fontesNecessarias: ["SPED_FISCAL"],
-    fontesQueConfirmam: ["ECD", "ECF", "SPED_CONTRIBUICOES"],
+    /**
+     * NÃO é um comparativo de regimes — é a indicação de que ele deve ser feito.
+     *
+     * Comparar Simples, Presumido e Real exige folha de pagamento, resultado
+     * contábil, composição de custos, benefícios fiscais aplicáveis e as
+     * vedações de cada regime. A auditoria express não tem nada disso, e
+     * afirmar "o regime adotado custou X a mais" com base só na apuração
+     * fiscal seria vender um número que o sistema não apurou — e que o cliente
+     * cobraria depois.
+     *
+     * O achado existe para abrir a porta do trabalho seguinte, não para
+     * substituí-lo.
+     */
     descricao:
-      "Recálculo mês a mês nos três regimes indica carga menor em regime diverso do adotado.",
+      "Há base para avaliar, em estudo próprio, se o regime tributário adotado " +
+      "é o mais econômico para a operação da empresa.",
     baseLegal: ["Lei nº 9.718/1998", "Lei nº 9.249/1995", "LC nº 123/2006"],
     textoCliente:
-      "Nos últimos 12 meses, o regime adotado custou {valor} a mais do que a melhor alternativa disponível.",
+      "Recomenda-se um planejamento tributário para verificar se há regime " +
+      "mais vantajoso que o atualmente adotado. A comparação entre Simples, " +
+      "Lucro Presumido e Lucro Real depende da folha de pagamento, do resultado " +
+      "contábil e dos benefícios fiscais aplicáveis — que não fazem parte desta " +
+      "auditoria.",
   },
 ];
 

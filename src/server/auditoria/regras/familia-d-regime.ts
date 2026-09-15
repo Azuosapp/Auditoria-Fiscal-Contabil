@@ -6,18 +6,33 @@ import { mesAno, moeda } from "../texto";
 /**
  * Família D — regime e enquadramento.
  *
- * O que dá para afirmar hoje vem do PGDAS-D, porque é o único documento em mãos
- * que declara enquadramento. O comparativo entre regimes (D04) exige a folha e
- * o resultado contábil — ainda não disponíveis — e por isso vira lacuna.
+ * O que dá para AFIRMAR sobre enquadramento vem do PGDAS-D, único documento em
+ * mãos que o declara — daí D01 e D02 rodarem só no Simples.
+ *
+ * O D04 é de outra natureza: não afirma nada sobre qual regime é melhor, apenas
+ * registra que cabe um estudo próprio. Comparar regimes exige folha, resultado
+ * contábil, composição de custos e benefícios aplicáveis, que a auditoria
+ * express não tem — e prometer o número sem eles seria vender o que o sistema
+ * não apurou.
  */
 
+const ROTULO_REGIME: Record<string, string> = {
+  SIMPLES_NACIONAL: "Simples Nacional",
+  LUCRO_PRESUMIDO: "Lucro Presumido",
+  LUCRO_REAL: "Lucro Real",
+  MEI: "MEI",
+  IMUNE_ISENTA: "regime de imunidade/isenção",
+  ARBITRADO: "Lucro Arbitrado",
+};
+
 export const familiaD: Regra = {
-  codigos: ["D01", "D02"],
+  codigos: ["D01", "D02", "D04"],
 
   async executar(ctx: ContextoRegra): Promise<AchadoProduzido[]> {
     const achados: AchadoProduzido[] = [];
     achados.push(...(await d01Sublimite(ctx)));
     achados.push(...(await d02FatorR(ctx)));
+    achados.push(...(await d04PlanejamentoRecomendado(ctx)));
     return achados;
   },
 };
@@ -94,6 +109,73 @@ async function d01Sublimite(ctx: ContextoRegra): Promise<AchadoProduzido[]> {
   }
 
   return achados;
+}
+
+/**
+ * D04 — indicação de que cabe um planejamento tributário.
+ *
+ * NÃO compara regimes, e é importante que não compare: Simples, Presumido e
+ * Real só podem ser confrontados com a folha de pagamento, o resultado
+ * contábil, a composição de custos, os benefícios fiscais aplicáveis e as
+ * vedações de cada regime. Nada disso está na auditoria express.
+ *
+ * Afirmar "o regime custou X a mais" com base só na apuração fiscal seria
+ * apresentar ao cliente um número que o sistema não apurou — e que ele cobraria
+ * depois, com razão. O achado abre a porta do trabalho seguinte; não o
+ * substitui.
+ *
+ * Nasce uma vez por auditoria, sem competência e sem valor: não é um erro
+ * encontrado, é uma recomendação de serviço.
+ */
+async function d04PlanejamentoRecomendado(
+  ctx: ContextoRegra,
+): Promise<AchadoProduzido[]> {
+  // Só faz sentido recomendar quando há apuração lida: sem faturamento
+  // conhecido, a recomendação seria genérica e valeria para qualquer empresa.
+  const apuracoes = await prisma.apuracaoFiscal.count({
+    where: { documento: { auditoriaId: ctx.auditoriaId } },
+  });
+  if (apuracoes === 0) return [];
+
+  const regimeAtual = [...new Set(ctx.regimePorExercicio.values())];
+  const nomeRegime =
+    regimeAtual.length === 1
+      ? ROTULO_REGIME[regimeAtual[0]] ?? regimeAtual[0]
+      : undefined;
+
+  return [
+    {
+      codigo: "D04",
+      severidade: "OPORTUNIDADE",
+      confianca: "ALTA",
+      descricao:
+        `Há ${apuracoes} competência(s) de apuração lidas` +
+        (nomeRegime ? `, com a empresa no ${nomeRegime}` : "") +
+        `. Base suficiente para abrir um estudo de regime em trabalho próprio.`,
+      textoCliente:
+        `Recomenda-se um planejamento tributário para verificar se há regime ` +
+        `mais vantajoso que o ${nomeRegime ? `${nomeRegime}, ` : "atualmente "}` +
+        `adotado. A comparação entre Simples Nacional, Lucro Presumido e Lucro ` +
+        `Real depende da folha de pagamento, do resultado contábil e dos ` +
+        `benefícios fiscais aplicáveis à atividade — informações que não fazem ` +
+        `parte desta auditoria.`,
+      recomendacao:
+        "Levantar folha de pagamento, DRE e composição de custos dos últimos 12 " +
+        "meses e simular os três regimes, considerando benefícios fiscais, " +
+        "vedações e o custo de mudança.",
+      // Sem valor: o sistema não calculou economia nenhuma, e estimar aqui
+      // seria inventar o número que o estudo ainda vai produzir.
+      declarado: true,
+      evidencias: [
+        {
+          arquivo: "Apuração fiscal do período",
+          observacao:
+            `${apuracoes} competência(s) com apuração de ICMS lida — base do ` +
+            `faturamento para o estudo.`,
+        },
+      ],
+    },
+  ];
 }
 
 /**
