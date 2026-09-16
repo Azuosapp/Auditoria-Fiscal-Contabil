@@ -12,6 +12,7 @@ import { familiaB } from "./regras/familia-b-receita";
 import { familiaC } from "./regras/familia-c-credito";
 import { familiaD } from "./regras/familia-d-regime";
 import { familiaE } from "./regras/familia-e-icms";
+import { familiaF } from "./regras/familia-f-contabil";
 import { mesAno } from "./texto";
 
 /**
@@ -24,7 +25,7 @@ import { mesAno } from "./texto";
  * a reunião com o cliente.
  */
 
-const REGRAS: Regra[] = [familiaB, familiaC, familiaD, familiaE];
+const REGRAS: Regra[] = [familiaB, familiaC, familiaD, familiaE, familiaF];
 
 export interface ResultadoAuditoria {
   achados: number;
@@ -83,15 +84,36 @@ export async function auditar(auditoriaId: string): Promise<ResultadoAuditoria> 
 
   await gravarAchados(auditoriaId, produzidos, regimes);
 
-  const { avaliaveis, bloqueados, foraDoRegime } = cobertura(
-    fontesDisponiveis,
-    regimes,
-  );
+  const cob = cobertura(fontesDisponiveis, regimes);
+  const { bloqueados, foraDoRegime } = cob;
+
+  // Ter os documentos não basta: sem regra programada, ninguém conferiu. Esses
+  // itens são declarados como não verificados, senão o relatório diria "sem
+  // apontamento" sobre algo que nunca foi olhado.
+  const implementados = new Set(REGRAS.flatMap((r) => r.codigos));
+  const avaliaveis = cob.avaliaveis.filter((d) => implementados.has(d.codigo));
+  const naoAutomatizados = cob.avaliaveis.filter((d) => !implementados.has(d.codigo));
+
   const competenciasSemEscrituracao = await gravarLacunas(
     auditoriaId,
     bloqueados,
     ctx,
   );
+  for (const d of naoAutomatizados) {
+    await prisma.lacuna.create({
+      data: {
+        auditoriaId,
+        escopo: `${d.codigo} — ${d.titulo}`,
+        area: d.area,
+        documentoFaltante: null,
+        descricao:
+          "Verificação ainda não automatizada no sistema. Os documentos necessários " +
+          "foram entregues: a conferência depende de revisão manual ou da análise do " +
+          "Claude. " +
+          d.descricao,
+      },
+    });
+  }
 
   const totais = await calcularTotais(auditoriaId);
   const nivelAlcancado = nivelDe(fontesDisponiveis);
@@ -161,7 +183,7 @@ async function fontesComDadoExtraido(
   // Pacote .zip entra como DESCONHECIDO, mas o que ele produziu foi gravado sob
   // o próprio documento. Se houve extração, as fontes reais vêm do que existe
   // no banco — daí a conferência abaixo.
-  const [temNota, temApuracaoIcms, temContrib, temSimples, temEvento, temConfissao] =
+  const [temNota, temApuracaoIcms, temContrib, temSimples, temEvento, temConfissao, temEcf, temEcd] =
     await Promise.all([
       prisma.notaFiscal.count({
         where: { documento: { auditoriaId }, origem: "XML_AUTORIZADO" },
@@ -171,6 +193,8 @@ async function fontesComDadoExtraido(
       prisma.apuracaoSimples.count({ where: { documento: { auditoriaId } } }),
       prisma.eventoNfe.count({ where: { documento: { auditoriaId } } }),
       prisma.confissao.count({ where: { documento: { auditoriaId } } }),
+      prisma.apuracaoEcf.count({ where: { documento: { auditoriaId } } }),
+      prisma.saldoConta.count({ where: { documento: { auditoriaId } } }),
     ]);
 
   if (temNota > 0) fontes.add("NFE_XML");
@@ -179,6 +203,8 @@ async function fontesComDadoExtraido(
   if (temSimples > 0) fontes.add("PGDAS");
   if (temEvento > 0) fontes.add("EVENTO_NFE");
   if (temConfissao > 0) fontes.add("DCTF");
+  if (temEcf > 0) fontes.add("ECF");
+  if (temEcd > 0) fontes.add("ECD");
 
   const escrituradas = await prisma.notaFiscal.count({
     where: { documento: { auditoriaId }, origem: "ESCRITURACAO" },

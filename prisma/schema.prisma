@@ -191,7 +191,9 @@ model Lacuna {
   /// Código do achado ou família que não pôde ser avaliado.
   escopo          String
   area            AreaAchado @default(FISCAL)
-  documentoFaltante TipoDocumento
+  /// Vazio quando os documentos vieram, mas a verificação ainda não é
+  /// automatizada — nenhum documento a mais resolveria.
+  documentoFaltante TipoDocumento?
   competencia     String? @db.VarChar(7)
   descricao       String
 
@@ -265,6 +267,7 @@ model Documento {
   apuracoesFiscais  ApuracaoFiscal[]
   apuracoesContrib  ApuracaoContribuicoes[]
   lancamentos       LancamentoContabil[]
+  linhasDre         LinhaDre[]
   saldos            SaldoConta[]
   apuracoesEcf      ApuracaoEcf[]
   confissoes        Confissao[]
@@ -561,6 +564,9 @@ model Confissao {
   tributo       String  @db.VarChar(20)
   codigoReceita String? @db.VarChar(6)
   valorDebito   Decimal @db.Decimal(18, 2)
+  /// Data da declaração. O mesmo débito trimestral volta nas DCTFs de vários
+  /// meses; no confronto vale o da declaração mais recente.
+  dataDeclaracao DateTime?
   /// Vinculações que quitam sem DARF — evitam falso positivo na família A.
   valorPago        Decimal? @db.Decimal(18, 2)
   valorCompensado  Decimal? @db.Decimal(18, 2)
@@ -939,4 +945,26 @@ model ApontamentoIa {
   evidencias    Json
 
   @@index([analiseId])
+}
+
+/// ECD — Demonstração do Resultado (registro J150), por período do J005.
+/// É daqui que sai a receita bruta escriturada, confrontada com a da ECF (B09).
+model LinhaDre {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  dataInicio  DateTime
+  dataFim     DateTime
+  ordem       Int
+  codigoAglutinacao String
+  descricao   String
+  nivel       Int?
+  /// "T" totalizador ou "D" detalhe
+  tipo        String? @db.VarChar(1)
+  valor       Decimal @db.Decimal(18, 2)
+  /// "D" ou "C"
+  natureza    String? @db.VarChar(1)
+
+  @@index([documentoId, dataFim])
 }

@@ -137,9 +137,9 @@ const FAMILIA_A: DefinicaoAchado[] = [
   },
   {
     codigo: "A04",
-    area: "CONTABIL",
+    area: "FISCAL",
     regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
-    titulo: "IRPJ/CSLL apurado na ECF e não confessado em DCTF",
+    titulo: "IRPJ/CSLL da ECF divergente do confessado em DCTF",
     familia: "DIVERGENCIA_PAGAMENTO",
     severidade: "CRITICO",
     tributo: "IRPJ_CSLL",

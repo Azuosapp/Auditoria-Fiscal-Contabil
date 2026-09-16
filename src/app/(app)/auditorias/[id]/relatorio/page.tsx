@@ -516,7 +516,9 @@ export default async function RelatorioPage({
                     <tr key={l.id}>
                       <td>{l.escopo}</td>
                       <td style={{ width: "42mm" }}>
-                        {NOME_TIPO[l.documentoFaltante] ?? l.documentoFaltante}
+                        {l.documentoFaltante
+                          ? (NOME_TIPO[l.documentoFaltante] ?? l.documentoFaltante)
+                          : "— (verificação ainda não automatizada)"}
                       </td>
                     </tr>
                   ))}
@@ -528,7 +530,8 @@ export default async function RelatorioPage({
           <h3>Documentos que ampliariam o alcance</h3>
           <p style={{ fontSize: "9pt" }}>
             A obtenção dos documentos abaixo permitiria concluir as{" "}
-            {naoVerificados.length} verificações pendentes:
+            {naoVerificados.filter((v) => v.lacuna?.documentoFaltante).length}{" "}
+            verificações pendentes por falta de documento:
           </p>
           <table>
             <tbody>
@@ -810,10 +813,14 @@ function Verificacao({ item }: { item: ItemVerificado }) {
         <div style={{ fontSize: "8.5pt" }}>
           {definicao.descricao}{" "}
           <strong>
-            Não foi possível verificar: falta{" "}
-            {NOME_TIPO[lacuna?.documentoFaltante ?? ""] ??
-              lacuna?.documentoFaltante}
-            .
+            {lacuna?.documentoFaltante ? (
+              <>
+                Não foi possível verificar: falta{" "}
+                {NOME_TIPO[lacuna.documentoFaltante] ?? lacuna.documentoFaltante}.
+              </>
+            ) : (
+              <>Não verificado: esta conferência ainda não é automatizada no sistema.</>
+            )}
           </strong>
         </div>
       ) : null}

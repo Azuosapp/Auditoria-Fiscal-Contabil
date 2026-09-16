@@ -574,7 +574,7 @@ export function ListaAchados({
                           </div>
                         </td>
                         <td className="font-mono text-[10px]">
-                          {l.documentoFaltante}
+                          {l.documentoFaltante ?? "— (não automatizada)"}
                         </td>
                         <td className="font-mono text-[10px]">
                           {l.competencia ? fmtComp(l.competencia) : "—"}

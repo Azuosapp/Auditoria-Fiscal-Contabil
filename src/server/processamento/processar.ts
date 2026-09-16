@@ -11,6 +11,8 @@ import {
 import { parseExtratoPgdas, ehExtratoPgdas } from "@/server/extraction/pgdas-extrato";
 import { parseSituacaoFiscal } from "@/server/extraction/situacao-fiscal";
 import { parseApuracaoDctf } from "@/server/extraction/dctf-mit";
+import { parseEcf } from "@/server/extraction/ecf";
+import { parseEcd } from "@/server/extraction/ecd";
 import { pdfBufferParaTexto } from "@/server/extraction/pdf-texto";
 import { decodeTextBuffer } from "@/server/extraction/encoding";
 import { ehZip } from "@/server/extraction/zip";
@@ -23,6 +25,8 @@ import {
   persistirEventos,
   persistirNotas,
   persistirDctf,
+  persistirEcd,
+  persistirEcf,
   persistirPgdas,
   persistirSituacaoFiscal,
   reconciliar,
@@ -50,8 +54,6 @@ export interface ResultadoProcessamento {
 
 /** Tipos que ainda não têm parser. Viram IGNORADO com motivo, não erro. */
 const SEM_PARSER: Partial<Record<TipoDocumento, string>> = {
-  ECD: "Parser de ECD (SPED Contábil) ainda não implementado.",
-  ECF: "Parser de ECF ainda não implementado.",
   DCTFWEB: "Parser de DCTFWeb ainda não implementado.",
   COMPROVANTE_ARRECADACAO:
     "Parser de comprovante de arrecadação (DARF/DAS/DARE) ainda não implementado.",
@@ -265,6 +267,10 @@ async function processarDocumento(
         eventos: contagem.eventos,
         pendenciasFiscais: contagem.pendenciasFiscais,
         confissoes: contagem.confissoes,
+        apuracoesEcf: contagem.apuracoesEcf,
+        saldosContabeis: contagem.saldosContabeis,
+        lancamentosContabeis: contagem.lancamentosContabeis,
+        linhasDre: contagem.linhasDre,
       },
     },
   });
@@ -287,6 +293,11 @@ async function limparExtracaoAnterior(documentoId: string) {
     prisma.apuracaoSimples.deleteMany({ where: { documentoId } }),
     prisma.pendenciaFiscal.deleteMany({ where: { documentoId } }),
     prisma.retratoSituacaoFiscal.deleteMany({ where: { documentoId } }),
+    prisma.confissao.deleteMany({ where: { documentoId } }),
+    prisma.apuracaoEcf.deleteMany({ where: { documentoId } }),
+    prisma.saldoConta.deleteMany({ where: { documentoId } }),
+    prisma.lancamentoContabil.deleteMany({ where: { documentoId } }),
+    prisma.linhaDre.deleteMany({ where: { documentoId } }),
   ]);
 }
 
@@ -377,6 +388,35 @@ async function processarUnico(
       if (contagem.pendenciasFiscais === 0) contagem.pendenciasFiscais = 1;
 
       return { parser: "situacao-fiscal", contagem, avisos: extraida.avisos };
+    }
+
+    case "ECF": {
+      const ecf = parseEcf(buffer);
+      if (!ecf) {
+        return {
+          parser: "ecf",
+          contagem: contagemVazia(),
+          avisos: ["O arquivo não tem a estrutura de uma ECF (registro |0000|LECF|)."],
+        };
+      }
+      const contagem = contagemVazia();
+      contagem.apuracoesEcf = await prisma.$transaction((tx) =>
+        persistirEcf(tx, documentoId, ecf),
+      );
+      return { parser: "ecf", contagem, avisos: ecf.avisos };
+    }
+
+    case "ECD": {
+      const ecd = parseEcd(buffer);
+      if (!ecd) {
+        return {
+          parser: "ecd",
+          contagem: contagemVazia(),
+          avisos: ["O arquivo não tem a estrutura de uma ECD (registro |0000|LECD|)."],
+        };
+      }
+      const contagem = { ...contagemVazia(), ...(await persistirEcd(documentoId, ecd)) };
+      return { parser: "ecd", contagem, avisos: ecd.avisos };
     }
 
     case "DCTF": {

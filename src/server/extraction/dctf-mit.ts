@@ -49,11 +49,28 @@ const NOME_POR_CODIGO: Record<string, string> = {
   "0668": "IPI",
   "0676": "IPI",
   "1097": "IPI",
+  // IRPJ e CSLL — tabela da DCTF, páginas de IRPJ e de CSLL.
+  "0220": "IRPJ", // obrigada ao Lucro Real, não financeira, trimestral
+  "1599": "IRPJ", // obrigada ao Lucro Real, financeira, trimestral
+  "3373": "IRPJ", // optante pelo Lucro Real, não financeira, trimestral
+  "2089": "IRPJ", // Lucro Presumido, trimestral
+  "6012": "CSLL", // Lucro Real, não financeira, trimestral
+  "2030": "CSLL", // Lucro Real, financeira, trimestral
+  "2372": "CSLL", // Lucro Presumido/Arbitrado, trimestral
   "6912": "PIS", // não cumulativo
   "8109": "PIS", // cumulativo
   "5856": "COFINS", // não cumulativa
   "2172": "COFINS", // cumulativa
 };
+
+/**
+ * Códigos de apuração trimestral. Neles, o `paDebito` não traz o mês: traz o
+ * TRIMESTRE — "012025" é o 1º trimestre de 2025, não janeiro. Ler como mês
+ * jogava o IRPJ do 4º trimestre em abril e desalinhava todo confronto com a
+ * ECF. A competência gravada passa a ser o último mês do trimestre, que é o
+ * mês de encerramento da apuração.
+ */
+const CODIGOS_TRIMESTRAIS = new Set(["0220", "1599", "3373", "2089", "6012", "2030", "2372"]);
 
 export interface DebitoConfessado {
   /** "2025-06" — do `paDebito` do próprio débito, não do cabeçalho. */
@@ -67,6 +84,11 @@ export interface DebitoConfessado {
 
 export interface ApuracaoDctf {
   cnpj?: string;
+  /**
+   * Data da apuração (`dtApuracaoDebitos`). O mesmo débito trimestral aparece
+   * nas DCTFs de vários meses: vale o da declaração mais recente.
+   */
+  dataApuracao?: Date;
   /** Competência do cabeçalho — "2025-06". */
   competencia?: string;
   debitos: DebitoConfessado[];
@@ -96,6 +118,31 @@ function valor(v: unknown): Prisma.Decimal | null {
   const texto = String(v).trim();
   if (!/^-?\d+(\.\d+)?$/.test(texto)) return null;
   return new Prisma.Decimal(texto);
+}
+
+/** "20250703" → Date em UTC. */
+function paraData(v: unknown): Date | undefined {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(String(v ?? "").trim());
+  if (!m) return undefined;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+/** Competência do débito, respeitando os códigos de apuração trimestral. */
+export function competenciaDoDebito(
+  periodo: string | undefined,
+  codTrib: string,
+): string | undefined {
+  if (!periodo) return undefined;
+  const m = /^(\d{2})(\d{4})$/.exec(String(periodo).trim());
+  if (!m) return undefined;
+  const [, parte, ano] = m;
+  if (CODIGOS_TRIMESTRAIS.has(codTrib.slice(0, 4))) {
+    const trimestre = Number(parte);
+    if (trimestre < 1 || trimestre > 4) return undefined;
+    return `${ano}-${String(trimestre * 3).padStart(2, "0")}`;
+  }
+  return paraCompetencia(periodo);
 }
 
 function nomeDoTributo(codTrib: string): string {
@@ -176,14 +223,19 @@ export function parseApuracaoDctf(buffer: Buffer): ApuracaoDctf | null {
 
     // A competência do débito manda. Sem `paDebito`, cai na do cabeçalho.
     const doDebito =
-      paraCompetencia(d["paDebito"] as string | undefined) ?? competencia;
+      competenciaDoDebito(d["paDebito"] as string | undefined, codTrib) ??
+      competencia;
     if (!doDebito) {
       avisos.push(
         `Débito do código ${codTrib} sem competência identificável — ignorado.`,
       );
       continue;
     }
-    if (competencia && doDebito !== competencia) {
+    if (
+      competencia &&
+      doDebito !== competencia &&
+      !CODIGOS_TRIMESTRAIS.has(codTrib.slice(0, 4))
+    ) {
       avisos.push(
         `Débito do código ${codTrib} é do período ${doDebito}, diferente da ` +
           `apuração de ${competencia} — gravado na competência do débito.`,
@@ -217,5 +269,7 @@ export function parseApuracaoDctf(buffer: Buffer): ApuracaoDctf | null {
     );
   }
 
-  return { cnpj, competencia, debitos, total, avisos };
+  const dataApuracao = paraData(raiz["dtApuracaoDebitos"]);
+
+  return { cnpj, dataApuracao, competencia, debitos, total, avisos };
 }

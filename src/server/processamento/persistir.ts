@@ -7,6 +7,8 @@ import type {
 } from "@/server/extraction/types";
 import type { ExtractionResultSpedContribuicoes } from "@/server/extraction/sped-contribuicoes";
 import type { ApuracaoDctf } from "@/server/extraction/dctf-mit";
+import type { EcfExtraida } from "@/server/extraction/ecf";
+import type { EcdExtraida } from "@/server/extraction/ecd";
 import type { ExtratoPgdas } from "@/server/extraction/pgdas-extrato";
 import type { SituacaoFiscalExtraida } from "@/server/extraction/situacao-fiscal";
 import { paraCompetencia } from "@/server/extraction/identificar-empresa";
@@ -33,6 +35,12 @@ export interface ContagemPersistida {
   pendenciasFiscais: number;
   /** Débitos confessados em DCTF. */
   confissoes: number;
+  /** ECF: IRPJ e CSLL por período. */
+  apuracoesEcf: number;
+  /** ECD: saldos mensais, partidas de lançamento e linhas da DRE. */
+  saldosContabeis: number;
+  lancamentosContabeis: number;
+  linhasDre: number;
 }
 
 export function contagemVazia(): ContagemPersistida {
@@ -45,6 +53,10 @@ export function contagemVazia(): ContagemPersistida {
     eventos: 0,
     pendenciasFiscais: 0,
     confissoes: 0,
+    apuracoesEcf: 0,
+    saldosContabeis: 0,
+    lancamentosContabeis: 0,
+    linhasDre: 0,
   };
 }
 
@@ -61,6 +73,10 @@ export function somarContagens(
     eventos: a.eventos + b.eventos,
     pendenciasFiscais: a.pendenciasFiscais + b.pendenciasFiscais,
     confissoes: a.confissoes + b.confissoes,
+    apuracoesEcf: a.apuracoesEcf + b.apuracoesEcf,
+    saldosContabeis: a.saldosContabeis + b.saldosContabeis,
+    lancamentosContabeis: a.lancamentosContabeis + b.lancamentosContabeis,
+    linhasDre: a.linhasDre + b.linhasDre,
   };
 }
 
@@ -72,7 +88,11 @@ export function totalDe(c: ContagemPersistida): number {
     c.apuracoesSimples +
     c.eventos +
     c.pendenciasFiscais +
-    c.confissoes
+    c.confissoes +
+    c.apuracoesEcf +
+    c.saldosContabeis +
+    c.lancamentosContabeis +
+    c.linhasDre
   );
 }
 
@@ -419,11 +439,87 @@ export async function persistirDctf(
         tributo: d.tributo,
         codigoReceita: d.codigoReceita,
         valorDebito: d.valor,
+        dataDeclaracao: apuracao.dataApuracao,
       },
     });
   }
 
   return apuracao.debitos.length;
+}
+
+/** ECF: uma linha por tributo e período. Reprocessar reescreve o conjunto. */
+export async function persistirEcf(
+  tx: Prisma.TransactionClient,
+  documentoId: string,
+  ecf: EcfExtraida,
+): Promise<number> {
+  await tx.apuracaoEcf.deleteMany({ where: { documentoId } });
+  if (!ecf.exercicio || ecf.apuracoes.length === 0) return 0;
+  await tx.apuracaoEcf.createMany({
+    data: ecf.apuracoes.map((a) => ({
+      documentoId,
+      exercicio: ecf.exercicio!,
+      periodo: a.periodo,
+      tributo: a.tributo,
+      receitaDeclarada: a.receitaBruta,
+      baseCalculo: a.baseCalculo,
+      valorApurado: a.valorApurado,
+      adicional: a.adicional,
+      aPagar: a.aPagar,
+      registroOrigem: `${a.registroOrigem} ${a.periodoApuracao}`,
+    })),
+  });
+  return ecf.apuracoes.length;
+}
+
+/**
+ * ECD: saldos, partidas e DRE. Em lotes, porque cinco anos de escrituração
+ * passam de centenas de milhares de partidas.
+ */
+export async function persistirEcd(
+  documentoId: string,
+  ecd: EcdExtraida,
+): Promise<Pick<ContagemPersistida, "saldosContabeis" | "lancamentosContabeis" | "linhasDre">> {
+  await prisma.$transaction([
+    prisma.saldoConta.deleteMany({ where: { documentoId } }),
+    prisma.lancamentoContabil.deleteMany({ where: { documentoId } }),
+    prisma.linhaDre.deleteMany({ where: { documentoId } }),
+  ]);
+
+  const LOTE = 2000;
+  for (let i = 0; i < ecd.saldos.length; i += LOTE) {
+    await prisma.saldoConta.createMany({
+      data: ecd.saldos.slice(i, i + LOTE).map((s) => ({ documentoId, ...s })),
+      skipDuplicates: true,
+    });
+  }
+  for (let i = 0; i < ecd.lancamentos.length; i += LOTE) {
+    await prisma.lancamentoContabil.createMany({
+      data: ecd.lancamentos.slice(i, i + LOTE).map((l) => ({
+        documentoId,
+        data: l.data,
+        competencia: l.competencia,
+        numeroLancamento: l.numeroLancamento,
+        contaCodigo: l.contaCodigo,
+        contaNome: l.contaNome,
+        natureza: l.natureza,
+        valor: l.valor,
+        historico: l.historico,
+        linhaOrigem: l.linhaOrigem,
+      })),
+    });
+  }
+  for (let i = 0; i < ecd.dre.length; i += LOTE) {
+    await prisma.linhaDre.createMany({
+      data: ecd.dre.slice(i, i + LOTE).map((d) => ({ documentoId, ...d })),
+    });
+  }
+
+  return {
+    saldosContabeis: ecd.saldos.length,
+    lancamentosContabeis: ecd.lancamentos.length,
+    linhasDre: ecd.dre.length,
+  };
 }
 
 export async function persistirPgdas(
