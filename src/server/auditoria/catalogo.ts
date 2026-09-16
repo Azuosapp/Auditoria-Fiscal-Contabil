@@ -493,6 +493,47 @@ const FAMILIA_C: DefinicaoAchado[] = [
     textoCliente:
       "Há {valor} de crédito de ICMS a que a empresa tinha direito e não aproveitou.",
   },
+  {
+    codigo: "C05",
+    area: "FISCAL",
+    titulo: "Crédito de ICMS sobre bem de uso e consumo",
+    familia: "CREDITO",
+    severidade: "ALTO",
+    tributo: "ICMS",
+    fontesNecessarias: ["SPED_FISCAL"],
+    descricao:
+      "Crédito de ICMS (VL_ICMS do C170) em entrada de uso e consumo ou de bem alheio à " +
+      "atividade: material de construção e hidráulico, louças, peças de veículo, EPI, " +
+      "ferramentas manuais, máquina de cartão. Abrasivos, serras e brocas entram com " +
+      "confiança média, porque o crédito se sustenta com laudo de consumo na produção.",
+    exemplo:
+      "Em 05/2026 a nota 16526, de loja de material de construção, entrou com CFOP 1102 e " +
+      "R$ 66,38 de ICMS creditado sobre caixa de descarga (NCM 6910.90.00) numa metalúrgica.",
+    baseLegal: [
+      "Lei Complementar nº 87/1996, art. 20, § 1º (bem alheio à atividade)",
+      "Lei Complementar nº 87/1996, art. 33, I (uso e consumo a partir de 2033)",
+    ],
+    textoCliente: "Em {competencia} há {valor} de crédito de ICMS sobre bens de uso e consumo.",
+  },
+  {
+    codigo: "C06",
+    area: "FISCAL",
+    titulo: "PIS/COFINS destacado com alíquota de outro regime",
+    familia: "CREDITO",
+    regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
+    severidade: "MEDIO",
+    tributo: "PIS_COFINS",
+    fontesNecessarias: ["NFE_XML"],
+    descricao:
+      "NF-e de saída com PIS/COFINS a 1,65%/7,6% em empresa do Lucro Presumido, ou a " +
+      "0,65%/3% em empresa do Lucro Real. Mostra o cadastro fiscal errado, que costuma " +
+      "levar o erro à EFD-Contribuições.",
+    exemplo:
+      "A NF-e 4, de 01/2026, de empresa do Lucro Presumido, destaca PIS a 1,65% e COFINS " +
+      "a 7,6% sobre R$ 12.000,00.",
+    baseLegal: ["Lei nº 9.718/1998, arts. 2º e 8º (cumulativo)", "Lei nº 10.637/2002 e Lei nº 10.833/2003 (não cumulativo)"],
+    textoCliente: "Em {competencia} há notas com PIS/COFINS na alíquota de outro regime.",
+  },
 ];
 
 /** Família D — regime e enquadramento. */
@@ -697,6 +738,61 @@ const FAMILIA_E: DefinicaoAchado[] = [
     textoCliente:
       "Em {competencia} há vendas a não contribuinte de outro estado com CFOP de venda " +
       "a contribuinte, somando {valor}.",
+  },
+  {
+    codigo: "E11",
+    area: "FISCAL",
+    titulo: "Produção própria vendida com CFOP de revenda",
+    familia: "ICMS_OPERACIONAL",
+    severidade: "MEDIO",
+    tributo: "IPI",
+    fontesNecessarias: ["NFE_XML"],
+    descricao:
+      "Empresa industrial (IND_ATIV 0 na EFD, ou com vendas de produção) vende com CFOP " +
+      "5102/6102 um NCM que sai com CFOP de produção em outras notas e que nunca entrou " +
+      "com CFOP de compra para revenda. O CFOP de revenda tira a saída do IPI e do Bloco K.",
+    exemplo:
+      "A empresa fabrica formas metálicas: a NF-e 4 sai com CFOP 6101, mas as NF-e 6 a 18, " +
+      "do mesmo NCM 7216.61.10, saem com CFOP 6102, somando R$ 188.095,00, sem nenhuma " +
+      "compra desse NCM para revenda.",
+    baseLegal: ["Convênio s/nº de 15/12/1970 — Tabela de CFOP (5.101 e 5.102)", "RIPI/2010, art. 4º (industrialização)"],
+    textoCliente: "Em {competencia} há produção própria vendida com CFOP de revenda, somando {valor}.",
+  },
+  {
+    codigo: "E12",
+    area: "FISCAL",
+    titulo: "CFOP de entrada incompatível com a UF do emitente",
+    familia: "ICMS_OPERACIONAL",
+    severidade: "BAIXO",
+    tributo: "ICMS",
+    fontesNecessarias: ["SPED_FISCAL"],
+    descricao:
+      "Entrada escriturada com CFOP 2xxx (interestadual) de fornecedor do próprio estado, " +
+      "ou 1xxx (interna) de fornecedor de outro estado. A UF do emitente vem dos dois " +
+      "primeiros dígitos da chave de acesso.",
+    exemplo:
+      "A nota 2045, de 04/2026, de fornecedor de Goiás (chave iniciada em 52), foi " +
+      "escriturada no C170 com CFOP 2403 em vez de 1403.",
+    baseLegal: ["Convênio s/nº de 15/12/1970 — Tabela de CFOP", "Guia Prático da EFD ICMS/IPI — registro C170"],
+    textoCliente: "Em {competencia} há entradas escrituradas com CFOP que não corresponde à UF do fornecedor.",
+  },
+  {
+    codigo: "E13",
+    area: "FISCAL",
+    titulo: "Industrialização por encomenda sem retorno nem cobrança",
+    familia: "ICMS_OPERACIONAL",
+    severidade: "ALTO",
+    tributo: "ICMS",
+    fontesNecessarias: ["SPED_FISCAL", "NFE_XML"],
+    descricao:
+      "Entrada com CFOP 1901/2901 ou 1924/2924 (mercadoria de terceiro para industrializar) " +
+      "sem nenhuma NF-e própria de retorno (5902/5925) ou de cobrança da industrialização " +
+      "(5124/5125) depois dela. A suspensão do ICMS depende do retorno.",
+    exemplo:
+      "Em 02/2026 a empresa recebeu R$ 8.948,12 em perfis de aço com CFOP 1924 e, até " +
+      "31/07/2026, não emitiu nota 5925 nem 5125.",
+    baseLegal: ["Convênio s/nº de 15/12/1970 — Tabela de CFOP (1.924, 5.925 e 5.125)", "Convênio AE 15/1974 (suspensão na industrialização por encomenda)"],
+    textoCliente: "Em {competencia} há mercadoria recebida para industrialização sem retorno documentado, somando {valor}.",
   },
   {
     codigo: "E05",

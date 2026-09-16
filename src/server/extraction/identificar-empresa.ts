@@ -106,7 +106,9 @@ export class ColetorIdentidade {
   registrarRegime(r: RegimeDetectado) {
     // Evidência de escrituração (ECF) vence a de declaração (PGDAS) no mesmo ano
     // apenas se ainda não houver nada; conflito real vira alerta na tela.
-    if (!this.regimes.has(r.exercicio)) this.regimes.set(r.exercicio, r);
+    const atual = this.regimes.get(r.exercicio);
+    const ecfSobreEfd = atual?.origem?.startsWith("EFD-Contribuições") && r.origem?.startsWith("ECF");
+    if (!atual || ecfSobreEfd) this.regimes.set(r.exercicio, r);
   }
 
   concluir(): ResultadoIdentificacao {
@@ -291,5 +293,20 @@ export function regimeDaEcf(buffer: Buffer): RegimeTributario | undefined {
   if (/^\|(L100|L200|L300|M300|M350|N500|N600|N650)\|/m.test(texto)) {
     return "LUCRO_REAL";
   }
+  return undefined;
+}
+
+/**
+ * Regime do exercício deduzido do registro 0110 da EFD-Contribuições.
+ *
+ * COD_INC_TRIB 1 (não cumulativo) ou 3 (ambos) é Lucro Real; 2 (cumulativo
+ * exclusivo) é Lucro Presumido — ou Arbitrado, raro o bastante para não
+ * justificar deixar o exercício sem regime. A ECF, quando vier, prevalece.
+ */
+export function regimeDaEfdContribuicoes(buffer: Buffer): RegimeTributario | undefined {
+  const texto = decodeTextBuffer(buffer.subarray(0, 16384)).text;
+  const codigo = /^\|0110\|(\d)\|/m.exec(texto)?.[1];
+  if (codigo === "1" || codigo === "3") return "LUCRO_REAL";
+  if (codigo === "2") return "LUCRO_PRESUMIDO";
   return undefined;
 }

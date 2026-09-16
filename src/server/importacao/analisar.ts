@@ -9,6 +9,7 @@ import {
   ColetorIdentidade,
   lerRegistro0000,
   regimeDaEcf,
+  regimeDaEfdContribuicoes,
   paraCompetencia,
   type ResultadoIdentificacao,
 } from "@/server/extraction/identificar-empresa";
@@ -230,6 +231,18 @@ async function analisarArquivo(
       }
       coletor.registrarCompetencia(r.competenciaIni);
       coletor.registrarCompetencia(r.competenciaFim);
+
+      if (tipo === "SPED_CONTRIBUICOES") {
+        const regime = regimeDaEfdContribuicoes(buffer);
+        const exercicio = Number(r.competenciaIni?.slice(0, 4));
+        if (regime && Number.isFinite(exercicio)) {
+          coletor.registrarRegime({
+            exercicio,
+            regime,
+            origem: "EFD-Contribuições — registro 0110 (incidência)",
+          });
+        }
+      }
 
       if (tipo === "ECF") {
         const regime = regimeDaEcf(buffer);

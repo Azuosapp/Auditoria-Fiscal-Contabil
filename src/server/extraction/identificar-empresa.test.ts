@@ -9,6 +9,7 @@ import {
   normalizarCnpj,
   paraCompetencia,
   regimeDaEcf,
+  regimeDaEfdContribuicoes,
 } from "./identificar-empresa";
 
 describe("paraCompetencia", () => {
@@ -262,5 +263,19 @@ describe("lerRegistro0000 × parser completo, sobre arquivo real", () => {
     // O período começa em 01/01 — o caso exato que o fuso horário deslocava.
     const buffer = readFileSync(join(process.cwd(), "fixtures", "sped-exemplo.txt"));
     expect(lerRegistro0000(buffer, "SPED_FISCAL").competenciaIni).toBe("2026-01");
+  });
+});
+
+describe("regimeDaEfdContribuicoes", () => {
+  const b = (s: string) => Buffer.from(s, "latin1");
+  it("cumulativo exclusivo é Lucro Presumido", () => {
+    expect(regimeDaEfdContribuicoes(b("|0000|006|0|\n|0110|2|1||1|\n"))).toBe("LUCRO_PRESUMIDO");
+  });
+  it("não cumulativo ou misto é Lucro Real", () => {
+    expect(regimeDaEfdContribuicoes(b("|0000|006|0|\n|0110|1|1||1|\n"))).toBe("LUCRO_REAL");
+    expect(regimeDaEfdContribuicoes(b("|0000|006|0|\n|0110|3|1||1|\n"))).toBe("LUCRO_REAL");
+  });
+  it("sem 0110 não deduz", () => {
+    expect(regimeDaEfdContribuicoes(b("|0000|006|0|\n"))).toBeUndefined();
   });
 });
