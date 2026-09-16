@@ -16,6 +16,7 @@ import { familiaF } from "./regras/familia-f-contabil";
 import { familiaEDocumento } from "./regras/familia-e-documento";
 import { familiaG } from "./regras/familia-g-obrigacoes";
 import { familiaECfop } from "./regras/familia-e-cfop";
+import { familiaEAliquota } from "./regras/familia-e-aliquota";
 import { familiaCDocumento } from "./regras/familia-c-documento";
 import { mesAno } from "./texto";
 
@@ -30,7 +31,7 @@ import { mesAno } from "./texto";
  */
 
 const REGRAS: Regra[] = [
-  familiaB, familiaC, familiaCDocumento, familiaD, familiaE, familiaEDocumento, familiaECfop, familiaF, familiaG,
+  familiaB, familiaC, familiaCDocumento, familiaD, familiaE, familiaEDocumento, familiaECfop, familiaEAliquota, familiaF, familiaG,
 ];
 
 export interface ResultadoAuditoria {

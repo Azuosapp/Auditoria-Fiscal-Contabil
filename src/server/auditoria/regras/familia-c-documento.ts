@@ -8,6 +8,7 @@ import { mesAno, moeda } from "../texto";
  *
  *   C05 — crédito de ICMS sobre bem de uso e consumo ou alheio à atividade
  *   C06 — PIS/COFINS destacado na NF-e com alíquota de outro regime
+ *   C09 — PIS/COFINS sobre exportação ou venda de imobilizado
  */
 
 const ZERO = new Prisma.Decimal(0);
@@ -66,7 +67,7 @@ const CATEGORIAS: Categoria[] = [
 ];
 
 export const familiaCDocumento: Regra = {
-  codigos: ["C05", "C06"],
+  codigos: ["C05", "C06", "C09"],
 
   async executar(ctx: ContextoRegra): Promise<AchadoProduzido[]> {
     const achados: AchadoProduzido[] = [];
@@ -75,6 +76,7 @@ export const familiaCDocumento: Regra = {
     }
     if (ctx.fontesDisponiveis.has("NFE_XML")) {
       achados.push(...(await c06AliquotaPisCofinsDeOutroRegime(ctx)));
+      achados.push(...(await c09BaseIndevidaPisCofins(ctx)));
     }
     return achados;
   },
@@ -283,6 +285,84 @@ async function c06AliquotaPisCofinsDeOutroRegime(ctx: ContextoRegra): Promise<Ac
         observacao:
           `item ${c.item.numeroItem} · PIS ${c.item.aliqPis ? pct(c.item.aliqPis) : "—"} · ` +
           `COFINS ${c.item.aliqCofins ? pct(c.item.aliqCofins) : "—"} · CST ${c.item.cstPis ?? "—"}`,
+      })),
+    };
+  });
+}
+
+/**
+ * C09 — PIS/COFINS sobre receita que não integra a base.
+ *
+ * Exportação (CFOP 7xxx) é imune (CF, art. 149, § 2º, I) e a venda de bem do
+ * ativo imobilizado (5551/6551) fica fora da base nos dois regimes. Item com
+ * CST de PIS 01 ou 02 nessas operações indica que a receita foi tributada.
+ *
+ * É oportunidade de recuperação, com confiança média: o destaque na nota não
+ * prova o recolhimento, que está na EFD-Contribuições.
+ */
+async function c09BaseIndevidaPisCofins(ctx: ContextoRegra): Promise<AchadoProduzido[]> {
+  const itens = await prisma.notaFiscalItem.findMany({
+    where: {
+      cstPis: { in: ["01", "02"] },
+      OR: [{ cfop: { startsWith: "7" } }, { cfop: { in: ["5551", "6551"] } }],
+      nota: {
+        documento: { auditoriaId: ctx.auditoriaId },
+        origem: "XML_AUTORIZADO",
+        situacao: "AUTORIZADA",
+        direcao: "SAIDA",
+        cnpjEmitente: ctx.empresaCnpj,
+      },
+    },
+    include: { nota: { include: { documento: { select: { nomeArquivo: true } } } } },
+    orderBy: [{ nota: { dataEmissao: "asc" } }, { numeroItem: "asc" }],
+  });
+
+  type Caso = { item: (typeof itens)[number]; competencia: string; tributo: Prisma.Decimal };
+  const casos: Caso[] = itens.map((item) => ({
+    item,
+    competencia: item.nota.competencia,
+    tributo: item.valorItem
+      .times((item.aliqPis ?? ZERO).plus(item.aliqCofins ?? ZERO))
+      .dividedBy(100)
+      .toDecimalPlaces(2),
+  }));
+
+  const porComp = new Map<string, Caso[]>();
+  for (const c of casos) porComp.set(c.competencia, [...(porComp.get(c.competencia) ?? []), c]);
+
+  return [...porComp].map(([competencia, lista]) => {
+    const total = lista.reduce((s, c) => s.plus(c.tributo), ZERO);
+    const receita = lista.reduce((s, c) => s.plus(c.item.valorItem), ZERO);
+    const notas = [...new Set(lista.map((c) => c.item.nota.numero))];
+    const tipos = [
+      ...new Set(lista.map((c) => (c.item.cfop!.startsWith("7") ? "exportação" : "venda de imobilizado"))),
+    ];
+    return {
+      codigo: "C09",
+      competencia,
+      confianca: "MEDIA" as const,
+      descricao:
+        `${moeda(receita)} de ${tipos.join(" e ")} com PIS/COFINS tributado (CST 01/02) em ` +
+        `${notas.length} NF-e: ${moeda(total)} destacados.`,
+      textoCliente:
+        `Em ${mesAno(competencia)} as notas ${notas.join(", ")} tributaram PIS/COFINS sobre ` +
+        `${tipos.join(" e ")}, receita que não integra a base. Se foi recolhido, há ${moeda(total)} a recuperar.`,
+      recomendacao:
+        "Conferir na EFD-Contribuições se a receita entrou na base; se entrou, retificar e pedir " +
+        "a restituição ou a compensação.",
+      ressalva: "O destaque na nota não prova o recolhimento; confirmar na EFD-Contribuições.",
+      valorExposicao: total,
+      declarado: true,
+      evidencias: lista.slice(0, 15).map((c) => ({
+        tipo: "EXEMPLO" as const,
+        arquivo: c.item.nota.documento.nomeArquivo,
+        documentoNumero: c.item.nota.numero,
+        chave: c.item.nota.chave ?? undefined,
+        dataDocumento: dataBr(c.item.nota.dataEmissao),
+        valor: moeda(c.tributo),
+        observacao:
+          `CFOP ${c.item.cfop} · CST PIS ${c.item.cstPis} · ${moeda(c.item.valorItem)} · ` +
+          `PIS ${c.item.aliqPis ? pct(c.item.aliqPis) : "—"} · COFINS ${c.item.aliqCofins ? pct(c.item.aliqCofins) : "—"}`,
       })),
     };
   });

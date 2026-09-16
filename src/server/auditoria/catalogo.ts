@@ -534,6 +534,28 @@ const FAMILIA_C: DefinicaoAchado[] = [
     baseLegal: ["Lei nº 9.718/1998, arts. 2º e 8º (cumulativo)", "Lei nº 10.637/2002 e Lei nº 10.833/2003 (não cumulativo)"],
     textoCliente: "Em {competencia} há notas com PIS/COFINS na alíquota de outro regime.",
   },
+  {
+    codigo: "C09",
+    area: "FISCAL",
+    titulo: "PIS/COFINS sobre exportação ou venda de imobilizado",
+    familia: "CREDITO",
+    regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
+    severidade: "OPORTUNIDADE",
+    tributo: "PIS_COFINS",
+    fontesNecessarias: ["NFE_XML"],
+    descricao:
+      "NF-e de exportação (CFOP 7xxx) ou de venda de bem do ativo imobilizado (5551/6551) " +
+      "com PIS/COFINS em CST 01 ou 02. Nenhuma das duas receitas integra a base.",
+    exemplo:
+      "A NF-e 77, de 02/2026, vendeu uma máquina do imobilizado por R$ 80.000,00 com CFOP " +
+      "5551 e CST 01, destacando R$ 7.400,00 de PIS/COFINS.",
+    baseLegal: [
+      "Constituição Federal, art. 149, § 2º, I",
+      "Lei nº 9.718/1998, art. 3º, § 2º",
+      "Lei nº 10.637/2002 e Lei nº 10.833/2003, art. 1º, § 3º",
+    ],
+    textoCliente: "Em {competencia} há {valor} de PIS/COFINS sobre receita que não integra a base.",
+  },
 ];
 
 /** Família D — regime e enquadramento. */
@@ -793,6 +815,63 @@ const FAMILIA_E: DefinicaoAchado[] = [
       "31/07/2026, não emitiu nota 5925 nem 5125.",
     baseLegal: ["Convênio s/nº de 15/12/1970 — Tabela de CFOP (1.924, 5.925 e 5.125)", "Convênio AE 15/1974 (suspensão na industrialização por encomenda)"],
     textoCliente: "Em {competencia} há mercadoria recebida para industrialização sem retorno documentado, somando {valor}.",
+  },
+  {
+    codigo: "E18",
+    area: "FISCAL",
+    titulo: "Saída interna em Goiás a 17% depois de 01/04/2024",
+    familia: "ICMS_OPERACIONAL",
+    severidade: "CRITICO",
+    tributo: "ICMS",
+    fontesNecessarias: ["NFE_XML"],
+    descricao:
+      "Item de saída interna com CST 00 (sem redução de base) a 17%, depois que a " +
+      "alíquota modal de Goiás passou a 19%. Benefício que leva a carga a 17% se " +
+      "destaca como redução de base (CST 20), não com a alíquota.",
+    exemplo:
+      "A NF-e 812, de 15/05/2024, vendeu R$ 50.000,00 dentro de Goiás com CST 00 a 17%: " +
+      "R$ 1.000,00 de ICMS a menor.",
+    baseLegal: ["RCTE-GO, art. 20, I (Decreto nº 10.485/2024, vigência 01/04/2024)"],
+    textoCliente: "Em {competencia} há {valor} de ICMS a menor por alíquota interna de 17%.",
+  },
+  {
+    codigo: "E19",
+    area: "FISCAL",
+    titulo: "Saída interestadual abaixo da alíquota interestadual",
+    familia: "ICMS_OPERACIONAL",
+    severidade: "ALTO",
+    tributo: "ICMS",
+    fontesNecessarias: ["NFE_XML"],
+    descricao:
+      "Item de saída para outra UF com CST 00 e alíquota menor que a interestadual da " +
+      "operação: 7% saindo de Goiás, onde a interestadual é 12%, ou abaixo dos 4% do importado.",
+    exemplo:
+      "A NF-e 530, de 03/2026, vendeu R$ 20.000,00 de Goiás para a Bahia com CST 00 a 7%: " +
+      "R$ 1.000,00 de ICMS a menor.",
+    baseLegal: [
+      "RCTE-GO, art. 20, II e III",
+      "Resolução do Senado Federal nº 22/1989",
+      "Resolução do Senado Federal nº 13/2012",
+    ],
+    textoCliente: "Em {competencia} há {valor} de ICMS a menor em vendas para outros estados.",
+  },
+  {
+    codigo: "E22",
+    area: "FISCAL",
+    titulo: "Crédito de ICMS em entrada com imposto retido",
+    familia: "CREDITO",
+    severidade: "ALTO",
+    tributo: "ICMS",
+    fontesNecessarias: ["SPED_FISCAL"],
+    descricao:
+      "Entrada com CFOP 1403/2403 (compra para comercialização com substituição " +
+      "tributária) e ICMS creditado no C170. A revenda interna sai sem destaque, e o " +
+      "retido só gera crédito nas hipóteses do art. 45 do Anexo VIII.",
+    exemplo:
+      "Em 06/2026 a nota 4410, de R$ 12.000,00 em autopeças com CFOP 1403, foi escriturada " +
+      "com R$ 2.280,00 de ICMS creditado numa loja que só vende dentro de Goiás.",
+    baseLegal: ["RCTE-GO, Anexo VIII, art. 45", "RCTE-GO, Anexo VIII, art. 56 (Decreto nº 10.202/2023)"],
+    textoCliente: "Em {competencia} há {valor} de crédito de ICMS em compras com substituição tributária.",
   },
   {
     codigo: "E05",
