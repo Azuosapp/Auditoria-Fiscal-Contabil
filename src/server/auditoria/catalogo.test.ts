@@ -39,7 +39,7 @@ describe("catálogo", () => {
       ).toBeGreaterThan(60);
 
       // Um exemplo útil cita valor, data, código de registro ou percentual.
-      const temNumero = /R\$\s?[\d.]+,\d{2}|\d{2}\/\d{4}|\d{4}-\d{2}|[A-Z]\d{3}|\d+%|CST \d{2}|CFOP \d{4}/.test(
+      const temNumero = /R\$\s?[\d.]+,\d{2}|\d{2}\/\d{4}|\d{4}-\d{2}|[A-Z]\d{3}\b|\d+%|CST \d{2}|CFOP \d{4}/.test(
         d.exemplo,
       );
       expect(temNumero, `${d.codigo}: exemplo sem número, data ou registro`).toBe(
