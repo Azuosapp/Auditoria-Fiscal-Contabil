@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type { LinhaConfronto, ResumoConfronto, SituacaoConfronto, TributoFederal } from "@/server/confronto/apurado-declarado";
 import { moeda } from "@/lib/formato";
 
@@ -5,16 +6,8 @@ import { moeda } from "@/lib/formato";
  * Imposto apurado nas escriturações × declarado à Receita, por tributo e período.
  *
  * Duas variantes: "painel" (aba Contábil, densa) e "apresentacao" (tela do
- * cliente, maior e só com o que diverge em destaque).
+ * cliente, com mais respiro e o saldo de cada tributo no cabeçalho).
  */
-
-const NOME: Record<TributoFederal, string> = {
-  IRPJ: "IRPJ",
-  CSLL: "CSLL",
-  PIS: "PIS",
-  COFINS: "COFINS",
-  IPI: "IPI",
-};
 
 const SITUACAO: Record<SituacaoConfronto, { rotulo: string; cor: string; fundo: string }> = {
   CONFERE: { rotulo: "Confere", cor: "#047857", fundo: "#d1fae5" },
@@ -24,11 +17,13 @@ const SITUACAO: Record<SituacaoConfronto, { rotulo: string; cor: string; fundo: 
   SEM_ESCRITURACAO: { rotulo: "Declarado sem apuração", cor: "#1d4ed8", fundo: "#dbeafe" },
 };
 
+const ZERO = new Prisma.Decimal(0);
+
 function Selo({ situacao }: { situacao: SituacaoConfronto }) {
   const s = SITUACAO[situacao];
   return (
     <span
-      className="inline-block whitespace-nowrap rounded-full px-2 py-0.5 font-semibold"
+      className="inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 font-semibold"
       style={{ color: s.cor, background: s.fundo, fontSize: "0.85em" }}
     >
       {s.rotulo}
@@ -68,6 +63,8 @@ export function ConfrontoDeclarado({
   if (resumo.linhas.length === 0) return null;
 
   const tributos = [...new Set(resumo.linhas.map((l) => l.tributo))];
+  const th = grande ? "px-5 py-3 text-[11px] uppercase tracking-[0.8px]" : "px-2 py-1.5 text-[9.5px]";
+  const td = grande ? "px-5 py-3.5" : "px-2 py-1.5";
 
   return (
     <section className={grande ? "" : "card mb-3"}>
@@ -93,54 +90,78 @@ export function ConfrontoDeclarado({
         </div>
       ) : null}
 
-      <div className={grande ? "grid gap-4" : "grid gap-3 2xl:grid-cols-2"}>
-        {tributos.map((t) => {
+      <div className={grande ? "grid gap-5" : "grid gap-3 2xl:grid-cols-2"}>
+        {tributos.map((t: TributoFederal) => {
           const linhas = resumo.linhas.filter((l) => l.tributo === t);
           const temBase = linhas.some((l) => l.base);
+          const menor = linhas
+            .filter((l) => l.situacao === "DECLARADO_A_MENOR" || l.situacao === "NAO_DECLARADO")
+            .reduce((s, l) => s.plus(l.diferenca.abs()), ZERO);
+          const maior = linhas
+            .filter((l) => l.situacao === "DECLARADO_A_MAIOR" || l.situacao === "SEM_ESCRITURACAO")
+            .reduce((s, l) => s.plus(l.diferenca.abs()), ZERO);
           return (
             <div
               key={t}
-              className="overflow-hidden rounded-lg border border-surface-border bg-white"
-              style={grande ? { boxShadow: "0 1px 3px rgba(0,0,0,.08)" } : undefined}
+              className={grande ? "overflow-hidden rounded-2xl bg-white" : "overflow-hidden rounded-lg border border-surface-border bg-white"}
+              style={grande ? { boxShadow: "0 2px 12px rgba(27, 58, 140, 0.08)" } : undefined}
             >
               <div
-                className="flex items-center justify-between px-3 py-2 text-white"
+                className={`flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-white ${grande ? "px-5 py-3.5" : "px-3 py-2"}`}
                 style={{ background: "var(--azuos-hero)" }}
               >
-                <span className={grande ? "text-[16px] font-bold" : "text-[12px] font-bold"}>{NOME[t]}</span>
-                <span className="text-white/70" style={{ fontSize: grande ? 12 : 10 }}>
-                  apurado na {linhas[0].fonteApurado} × declarado em DCTF
-                </span>
+                <div className="flex items-baseline gap-3">
+                  <span className={grande ? "text-[18px] font-extrabold" : "text-[12px] font-bold"}>{t}</span>
+                  <span className="text-white/65" style={{ fontSize: grande ? 13 : 10 }}>
+                    apurado na {linhas[0].fonteApurado} × declarado em DCTF
+                  </span>
+                </div>
+                {grande && (menor.greaterThan(0) || maior.greaterThan(0)) ? (
+                  <div className="flex gap-5 text-[13px]">
+                    {menor.greaterThan(0) ? (
+                      <span>
+                        <span className="text-white/65">não declarado </span>
+                        <strong className="tabular-nums">{moeda(menor)}</strong>
+                      </span>
+                    ) : null}
+                    {maior.greaterThan(0) ? (
+                      <span>
+                        <span className="text-white/65">declarado a maior </span>
+                        <strong className="tabular-nums">{moeda(maior)}</strong>
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               <div className="overflow-x-auto">
-              <table className="w-full" style={{ fontSize: grande ? 14 : 11 }}>
-                <thead>
-                  <tr className="text-left text-content-muted" style={{ fontSize: grande ? 11 : 9.5 }}>
-                    <th className="px-3 py-1.5 font-semibold">Período</th>
-                    {temBase ? <th className="px-2 py-1.5 text-right font-semibold">Lucro / base</th> : null}
-                    <th className="px-2 py-1.5 text-right font-semibold">Apurado</th>
-                    <th className="px-2 py-1.5 text-right font-semibold">Declarado</th>
-                    <th className="px-2 py-1.5 text-right font-semibold">Diferença</th>
-                    <th className="px-3 py-1.5 text-right font-semibold">Situação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {linhas.map((l) => (
-                    <tr key={l.competencia} className="border-t border-surface-border">
-                      <td className="whitespace-nowrap px-3 py-1.5 font-medium">{l.periodo}</td>
-                      {temBase ? <td className="whitespace-nowrap px-2 py-1.5 text-right">{l.base ? moeda(l.base) : "—"}</td> : null}
-                      <td className="whitespace-nowrap px-2 py-1.5 text-right">{moeda(l.apurado)}</td>
-                      <td className="whitespace-nowrap px-2 py-1.5 text-right">{moeda(l.declarado)}</td>
-                      <td className="whitespace-nowrap px-2 py-1.5 text-right">
-                        <Diferenca l={l} />
-                      </td>
-                      <td className="px-3 py-1.5 text-right">
-                        <Selo situacao={l.situacao} />
-                      </td>
+                <table className="w-full tabular-nums" style={{ fontSize: grande ? 15 : 11 }}>
+                  <thead>
+                    <tr className={grande ? "bg-slate-50 text-content-muted" : "text-content-muted"}>
+                      <th className={`${th} text-left font-semibold`}>Período</th>
+                      {temBase ? <th className={`${th} text-right font-semibold`}>Lucro / base</th> : null}
+                      <th className={`${th} text-right font-semibold`}>Apurado</th>
+                      <th className={`${th} text-right font-semibold`}>Declarado</th>
+                      <th className={`${th} text-right font-semibold`}>Diferença</th>
+                      <th className={`${th} text-right font-semibold`}>Situação</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {linhas.map((l) => (
+                      <tr key={l.competencia} className="border-t border-surface-border">
+                        <td className={`${td} whitespace-nowrap font-semibold text-content`}>{l.periodo}</td>
+                        {temBase ? <td className={`${td} whitespace-nowrap text-right text-content-muted`}>{l.base ? moeda(l.base) : "—"}</td> : null}
+                        <td className={`${td} whitespace-nowrap text-right`}>{moeda(l.apurado)}</td>
+                        <td className={`${td} whitespace-nowrap text-right`}>{moeda(l.declarado)}</td>
+                        <td className={`${td} whitespace-nowrap text-right`}>
+                          <Diferenca l={l} />
+                        </td>
+                        <td className={`${td} text-right`}>
+                          <Selo situacao={l.situacao} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           );
