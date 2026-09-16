@@ -3,6 +3,8 @@ import { dec } from "@/server/tax/decimal";
 import { decodeTextBuffer, type DetectedEncoding } from "./encoding";
 import { isValidAccessKey } from "./access-key";
 import type {
+  ParsedDifal,
+  ParsedInventario,
   ExtractionResult,
   ParsedApuracao,
   ParsedApuracaoAjuste,
@@ -135,6 +137,11 @@ export function parseSpedEfd(
   let currentInvoice: ParsedInvoice | undefined;
   let pendingPeriod: { start?: Date; end?: Date } | undefined;
   let currentApuracao: ParsedApuracao | undefined;
+  const difal: ParsedDifal[] = [];
+  let currentDifal: ParsedDifal | undefined;
+  const inventarios: ParsedInventario[] = [];
+  let currentInventario: ParsedInventario | undefined;
+  let blocoK: "COM_DADOS" | "SEM_DADOS" | "AUSENTE" = "AUSENTE";
 
   const skippedByType = new Map<string, number>();
 
@@ -315,6 +322,7 @@ export function parseSpedEfd(
           const product = codItem ? products.get(codItem) : undefined;
           const item: ParsedInvoiceItem = {
             lineNumber: Number.parseInt(f(2) ?? "", 10) || 0,
+            code: codItem,
             description: f(4) ?? product?.description,
             ncm: product?.ncm,
             cfop: f(11),
@@ -322,6 +330,7 @@ export function parseSpedEfd(
             quantity: dec(f(5)),
             totalValue: dec(f(7)), // VL_ITEM
             icmsBase: dec(f(13)),
+            icmsRate: dec(f(14)),
             icmsValue: dec(f(15)),
             icmsStValue: dec(f(18)),
             ipiValue: dec(f(24)),
@@ -432,6 +441,60 @@ export function parseSpedEfd(
           break;
         }
 
+        /**
+         * DIFAL e FCP por UF (Guia Prático EFD ICMS/IPI v3.2.3, registros E300 e
+         * E310). O E300 abre a UF; o E310 traz os totais. UF aberta com E310
+         * zerado enquanto os XMLs destacam DIFAL para ela é o sinal de DIFAL
+         * não escriturado.
+         */
+        case "E300": {
+          currentDifal = {
+            uf: f(2) ?? "",
+            periodStart: parseSpedDate(f(3)),
+            periodEnd: parseSpedDate(f(4)),
+          };
+          difal.push(currentDifal);
+          break;
+        }
+        case "E310": {
+          if (currentDifal) {
+            currentDifal.totalDebitos = dec(f(4));
+            currentDifal.totalCreditos = dec(f(6));
+            currentDifal.aRecolher = dec(f(10));
+          }
+          break;
+        }
+
+        /** Inventário: H005 abre, H010 são os itens. */
+        case "H005": {
+          currentInventario = {
+            data: parseSpedDate(f(2)),
+            valor: dec(f(3)),
+            motivo: f(4),
+            itens: 0,
+          };
+          inventarios.push(currentInventario);
+          break;
+        }
+        case "H010": {
+          if (currentInventario) {
+            currentInventario.itens += 1;
+            const v = dec(f(6));
+            if (v) {
+              currentInventario.somaItens = currentInventario.somaItens
+                ? currentInventario.somaItens.add(v)
+                : v;
+            }
+          }
+          break;
+        }
+
+        /** K001 IND_MOV: 0 bloco com dados, 1 sem dados. */
+        case "K001": {
+          blocoK = f(2) === "0" ? "COM_DADOS" : "SEM_DADOS";
+          break;
+        }
+
         default: {
           skippedByType.set(reg, (skippedByType.get(reg) ?? 0) + 1);
           break;
@@ -473,5 +536,29 @@ export function parseSpedEfd(
     errors,
     apuracoes,
     identification,
+    difal,
+    inventarios,
+    blocoK,
+    dataAssinatura: dataAssinaturaDigital(buffer),
   };
+}
+
+/**
+ * Data da assinatura digital do arquivo SPED.
+ *
+ * O PVA anexa ao fim do arquivo a assinatura em PKCS#7. O atributo signingTime
+ * (OID 1.2.840.113549.1.9.5) traz a hora em UTCTime "AAMMDDhhmmssZ". O arquivo
+ * não é transmitido antes de assinado, então assinatura depois do prazo prova
+ * entrega fora do prazo; o recibo (.rec) traz a hora exata da transmissão.
+ */
+export function dataAssinaturaDigital(buffer: Buffer): Date | undefined {
+  const oid = Buffer.from("06092a864886f70d010905", "hex");
+  const i = buffer.lastIndexOf(oid);
+  if (i < 0) return undefined;
+  const trecho = buffer.subarray(i, i + 40).toString("latin1");
+  const m = /\x17\x0d(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})Z/.exec(trecho);
+  if (!m) return undefined;
+  const [, aa, mm, dd, hh, mi, ss] = m.map(Number);
+  const d = new Date(Date.UTC(2000 + aa, mm - 1, dd, hh, mi, ss));
+  return Number.isNaN(d.getTime()) ? undefined : d;
 }

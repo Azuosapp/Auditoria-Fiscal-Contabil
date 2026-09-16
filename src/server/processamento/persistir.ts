@@ -240,6 +240,10 @@ export async function persistirNotas(
         valorIpi: inv.totalIpi,
         valorPis: inv.totalPis,
         valorCofins: inv.totalCofins,
+        indicadorIeDestinatario: inv.destIeIndicator,
+        destinatarioContribuinte:
+          inv.destIeIndicator === undefined ? undefined : inv.destIeIndicator === "1",
+        consumidorFinal: inv.finalConsumer,
       },
     });
     notas += 1;
@@ -257,6 +261,17 @@ export async function persistirNotas(
           cstCofins: item.cstCofins,
           quantidade: item.quantity,
           valorItem: item.totalValue ?? new Prisma.Decimal(0),
+          codigo: item.code,
+          aliqIcms: item.icmsRate,
+          baseIcms: item.icmsBase,
+          valorIcms: item.icmsValue,
+          valorIcmsSt: item.icmsStValue,
+          valorIpi: item.ipiValue,
+          valorDifal: item.difalValue,
+          aliqPis: item.pisRate,
+          aliqCofins: item.cofinsRate,
+          origemMercadoria: item.origem,
+          temIbsCbs: item.hasIbsCbs,
         })),
       });
       itens += inv.items.length;
@@ -445,6 +460,66 @@ export async function persistirDctf(
   }
 
   return apuracao.debitos.length;
+}
+
+/**
+ * Controle do arquivo de escrituração, DIFAL (E300/E310) e inventário (H005).
+ * Tudo por documento: reprocessar apaga e regrava.
+ */
+export async function persistirControleEscrituracao(
+  tx: Prisma.TransactionClient,
+  documentoId: string,
+  resultado: ExtractionResult,
+  competencia: string | undefined,
+  indAtividade: string | undefined,
+  finalidade: string | undefined,
+): Promise<number> {
+  await tx.escrituracaoArquivo.deleteMany({ where: { documentoId } });
+  await tx.apuracaoDifal.deleteMany({ where: { documentoId } });
+  await tx.inventario.deleteMany({ where: { documentoId } });
+  if (!competencia) return 0;
+
+  await tx.escrituracaoArquivo.create({
+    data: {
+      documentoId,
+      competencia,
+      indAtividade,
+      blocoK: resultado.blocoK,
+      dataAssinatura: resultado.dataAssinatura,
+      finalidade,
+    },
+  });
+
+  let n = 1;
+  for (const d of resultado.difal ?? []) {
+    if (!d.uf) continue;
+    await tx.apuracaoDifal.create({
+      data: {
+        documentoId,
+        competencia,
+        uf: d.uf,
+        totalDebitos: d.totalDebitos ?? new Prisma.Decimal(0),
+        totalCreditos: d.totalCreditos,
+        aRecolher: d.aRecolher,
+      },
+    });
+    n += 1;
+  }
+  for (const i of resultado.inventarios ?? []) {
+    await tx.inventario.create({
+      data: {
+        documentoId,
+        competencia,
+        dataInventario: i.data,
+        valor: i.valor,
+        motivo: i.motivo,
+        somaItens: i.somaItens,
+        itens: i.itens,
+      },
+    });
+    n += 1;
+  }
+  return n;
 }
 
 /** ECF: uma linha por tributo e período. Reprocessar reescreve o conjunto. */

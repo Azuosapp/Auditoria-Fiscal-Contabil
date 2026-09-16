@@ -1,4 +1,5 @@
 import { dec, sum, type Money } from "@/server/tax/decimal";
+import { dataAssinaturaDigital } from "./sped";
 import { decodeTextBuffer, type DetectedEncoding } from "./encoding";
 import type { ExtractionResult } from "./types";
 
@@ -764,5 +765,6 @@ export function parseSpedContribuicoes(
     regimeApuracao: regime,
     pis: { credits: creditosPis, consolidation: consolidacaoPis },
     cofins: { credits: creditosCofins, consolidation: consolidacaoCofins },
+    dataAssinatura: dataAssinaturaDigital(buffer),
   };
 }

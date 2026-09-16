@@ -12,6 +12,7 @@ import { parseExtratoPgdas, ehExtratoPgdas } from "@/server/extraction/pgdas-ext
 import { parseSituacaoFiscal } from "@/server/extraction/situacao-fiscal";
 import { parseApuracaoDctf } from "@/server/extraction/dctf-mit";
 import { parseEcf } from "@/server/extraction/ecf";
+import { paraCompetencia } from "@/server/extraction/identificar-empresa";
 import { parseEcd } from "@/server/extraction/ecd";
 import { pdfBufferParaTexto } from "@/server/extraction/pdf-texto";
 import { decodeTextBuffer } from "@/server/extraction/encoding";
@@ -24,6 +25,7 @@ import {
   persistirApuracaoIcms,
   persistirEventos,
   persistirNotas,
+  persistirControleEscrituracao,
   persistirDctf,
   persistirEcd,
   persistirEcf,
@@ -298,6 +300,9 @@ async function limparExtracaoAnterior(documentoId: string) {
     prisma.saldoConta.deleteMany({ where: { documentoId } }),
     prisma.lancamentoContabil.deleteMany({ where: { documentoId } }),
     prisma.linhaDre.deleteMany({ where: { documentoId } }),
+    prisma.escrituracaoArquivo.deleteMany({ where: { documentoId } }),
+    prisma.apuracaoDifal.deleteMany({ where: { documentoId } }),
+    prisma.inventario.deleteMany({ where: { documentoId } }),
   ]);
 }
 
@@ -561,6 +566,24 @@ async function gravarExtracao(
           tx,
           documentoId,
           resultado,
+        );
+      }
+
+      // Controle do arquivo (prazo, atividade, Bloco K, DIFAL, inventário): só
+      // para escrituração, que tem período próprio no registro 0000.
+      const ident = resultado.identification;
+      const contrib = ehResultadoContribuicoes(resultado)
+        ? resultado.contribIdentification
+        : undefined;
+      const inicio = ident?.periodStart ?? contrib?.periodStart;
+      if (inicio && origem === "ESCRITURACAO") {
+        await persistirControleEscrituracao(
+          tx,
+          documentoId,
+          resultado,
+          paraCompetencia(inicio),
+          ident?.activityIndicator,
+          ident?.purposeCode,
         );
       }
     },

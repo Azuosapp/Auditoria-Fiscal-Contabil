@@ -63,6 +63,7 @@ function extractIcms(imposto: Record<string, unknown> | undefined) {
     icms: undefined as Money | undefined,
     icmsSt: undefined as Money | undefined,
     fcp: undefined as Money | undefined,
+    rate: undefined as Money | undefined,
     orig: undefined as string | undefined,
   };
   const icms = imposto?.ICMS as Record<string, unknown> | undefined;
@@ -75,6 +76,7 @@ function extractIcms(imposto: Record<string, unknown> | undefined) {
   out.cst = str(g.CST) ?? str(g.CSOSN);
   out.base = num(g.vBC);
   out.icms = num(g.vICMS);
+  out.rate = num(g.pICMS);
   out.icmsSt = num(g.vICMSST) ?? num(g.vST);
   out.fcp = num(g.vFCP) ?? num(g.vFCPST);
   return out;
@@ -104,6 +106,11 @@ function extractItem(det: Record<string, unknown>): ParsedInvoiceItem {
 
   return {
     lineNumber: intOrZero(det["@_nItem"]),
+    code: str(prod.cProd),
+    icmsRate: icms.rate,
+    pisRate: num(pisGroup?.pPIS),
+    cofinsRate: num(cofinsGroup?.pCOFINS),
+    hasIbsCbs: imposto?.IBSCBS !== undefined,
     description: str(prod.xProd),
     ncm: str(prod.NCM),
     cest: str(prod.CEST),
@@ -367,6 +374,8 @@ export function parseNfeXml(
     totalPis: num(icmsTot.vPIS),
     totalCofins: num(icmsTot.vCOFINS),
     totalFcp: num(icmsTot.vFCP),
+    destIeIndicator: str(dest.indIEDest),
+    finalConsumer: str(ide.indFinal) === undefined ? undefined : str(ide.indFinal) === "1",
     items,
   };
 

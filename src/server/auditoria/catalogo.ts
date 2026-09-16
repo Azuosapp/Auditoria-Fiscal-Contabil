@@ -579,21 +579,124 @@ const FAMILIA_E: DefinicaoAchado[] = [
   {
     codigo: "E02",
     area: "FISCAL",
-    titulo: "DIFAL não recolhido em venda interestadual",
+    titulo: "DIFAL destacado na NF-e e não escriturado no E300/E310",
+    familia: "ICMS_OPERACIONAL",
+    severidade: "CRITICO",
+    tributo: "ICMS",
+    fontesNecessarias: ["NFE_XML", "SPED_FISCAL"],
+    descricao:
+      "Venda a consumidor não contribuinte de outra UF com diferencial de alíquota " +
+      "destacado no XML (grupo ICMSUFDest), sem o débito correspondente no E300/E310 " +
+      "da UF de destino na EFD.",
+    exemplo:
+      "Duas notas de R$ 10.000,00 para consumidor final na Bahia destacam R$ 850,00 " +
+      "de DIFAL cada. A EFD do mês abre o E300 da Bahia, mas o E310 vem zerado: " +
+      "R$ 1.700,00 de imposto do estado de destino não declarados.",
+    baseLegal: [
+      "Emenda Constitucional nº 87/2015",
+      "Lei Complementar nº 190/2022",
+      "Guia Prático da EFD ICMS/IPI — registros E300 e E310",
+    ],
+    textoCliente:
+      "Em {competencia} há {valor} de DIFAL destacado nas notas e não escriturado " +
+      "para a UF de destino.",
+  },
+  {
+    codigo: "E07",
+    area: "FISCAL",
+    titulo: "ICMS da NF-e diferente do escriturado na EFD",
+    familia: "ICMS_OPERACIONAL",
+    severidade: "ALTO",
+    tributo: "ICMS",
+    fontesNecessarias: ["NFE_XML", "SPED_FISCAL"],
+    descricao:
+      "A mesma chave de acesso tem um valor de ICMS no XML autorizado e outro no " +
+      "registro C100 da EFD. Escriturado abaixo do destacado é imposto não declarado; " +
+      "acima, é documento que não mostra o imposto que foi apurado.",
+    exemplo:
+      "A NF-e 208, de R$ 30.000,00 para Mato Grosso, foi autorizada sem ICMS, mas a " +
+      "EFD a escriturou com R$ 3.600,00 a 12%. O imposto entrou na apuração, e o " +
+      "documento em poder do cliente não o destaca.",
+    baseLegal: [
+      "Ajuste SINIEF nº 07/2005 (NF-e)",
+      "Ajuste SINIEF nº 02/2009 (EFD ICMS/IPI)",
+      "RCTE-GO, arts. 356-C a 356-P",
+    ],
+    textoCliente:
+      "Em {competencia} há notas com ICMS escriturado diferente do destacado, " +
+      "somando {valor} de diferença.",
+  },
+  {
+    codigo: "E08",
+    area: "FISCAL",
+    titulo: "Alíquota acima da interestadual em saída para outra UF",
     familia: "ICMS_OPERACIONAL",
     severidade: "ALTO",
     tributo: "ICMS",
     fontesNecessarias: ["NFE_XML"],
-    fontesQueConfirmam: ["SPED_FISCAL", "COMPROVANTE_ARRECADACAO"],
     descricao:
-      "Venda interestadual a consumidor final não contribuinte sem o diferencial de alíquota correspondente.",
+      "Item de saída para outro estado com alíquota de ICMS maior que a interestadual " +
+      "(12%, 7% ou 4%). A diferença não é ICMS do estado de origem: para contribuinte, " +
+      "o destinatário não se credita dela; para não contribuinte, é DIFAL do destino.",
     exemplo:
-      "A NF-e 4820 vendeu R$ 8.900,00 a consumidor final não contribuinte " +
-      "em MG, e não há recolhimento do diferencial de alíquota na " +
-      "competência.",
-    baseLegal: ["EC nº 87/2015", "LC nº 190/2022"],
+      "A NF-e 315, de R$ 20.000,00 para Mato Grosso do Sul, saiu a 17% quando a " +
+      "alíquota da operação é 12%: R$ 1.000,00 de ICMS destacado e recolhido a mais " +
+      "em Goiás.",
+    baseLegal: [
+      "Resolução do Senado Federal nº 22/1989",
+      "Resolução do Senado Federal nº 13/2012",
+      "RCTE-GO, art. 20, II",
+    ],
     textoCliente:
-      "Há {valor} de DIFAL devido e não recolhido em {competencia}.",
+      "Em {competencia} há {valor} de ICMS destacado a maior em vendas para outros estados.",
+  },
+  {
+    codigo: "E09",
+    area: "FISCAL",
+    titulo: "Item tributado sem ICMS em saída interestadual",
+    familia: "ICMS_OPERACIONAL",
+    severidade: "CRITICO",
+    tributo: "ICMS",
+    fontesNecessarias: ["NFE_XML", "SPED_FISCAL"],
+    descricao:
+      "Item com CST 00 (tributação integral), alíquota zero e sem ICMS, vendido para " +
+      "outra UF, sem que a EFD tenha debitado o imposto. Não há benefício que explique " +
+      "o item sem destaque.",
+    exemplo:
+      "A NF-e 402 tem dois itens para o Pará: o primeiro, de R$ 8.000,00, saiu com CST " +
+      "00 e 0%; o segundo, com imposto. A EFD repete o documento, e R$ 960,00 de ICMS " +
+      "ficam sem destaque e sem apuração.",
+    baseLegal: [
+      "Lei Complementar nº 87/1996, art. 13",
+      "Resolução do Senado Federal nº 22/1989",
+      "RCTE-GO, art. 20, II",
+    ],
+    textoCliente:
+      "Em {competencia} há {valor} de ICMS não destacado nem apurado em itens tributados.",
+  },
+  {
+    codigo: "E10",
+    area: "FISCAL",
+    titulo: "CFOP de venda a contribuinte em venda a não contribuinte de outra UF",
+    familia: "ICMS_OPERACIONAL",
+    severidade: "MEDIO",
+    tributo: "ICMS",
+    fontesNecessarias: ["NFE_XML"],
+    descricao:
+      "NF-e para destinatário não contribuinte (indIEDest 9) de outra UF emitida com " +
+      "CFOP 6101 ou 6102. A venda a não contribuinte tem CFOP próprio — 6107 para " +
+      "produção do estabelecimento, 6108 para revenda —, que identifica o DIFAL da UF " +
+      "de destino.",
+    exemplo:
+      "A NF-e 77 vendeu uma forma metálica de R$ 10.000,00 para pessoa física na " +
+      "Bahia com CFOP 6102; como é produção própria para não contribuinte, o CFOP é 6107.",
+    baseLegal: [
+      "Convênio s/nº de 15/12/1970 — Tabela de CFOP (6.107 e 6.108)",
+      "Emenda Constitucional nº 87/2015",
+    ],
+    textoCliente:
+      "Em {competencia} há vendas a não contribuinte de outro estado com CFOP de venda " +
+      "a contribuinte, somando {valor}.",
   },
   {
     codigo: "E05",

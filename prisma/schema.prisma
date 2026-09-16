@@ -268,6 +268,9 @@ model Documento {
   apuracoesContrib  ApuracaoContribuicoes[]
   lancamentos       LancamentoContabil[]
   linhasDre         LinhaDre[]
+  escrituracao      EscrituracaoArquivo?
+  difal             ApuracaoDifal[]
+  inventarios       Inventario[]
   saldos            SaldoConta[]
   apuracoesEcf      ApuracaoEcf[]
   confissoes        Confissao[]
@@ -324,6 +327,8 @@ model NotaFiscal {
   cnpjDestinatario String?
   ufDestino        String?
   consumidorFinal  Boolean?
+  /// indIEDest: 1 contribuinte, 2 isento, 9 não contribuinte.
+  indicadorIeDestinatario String? @db.VarChar(1)
   destinatarioContribuinte Boolean?
 
   valorTotal   Decimal @db.Decimal(18, 2)
@@ -387,6 +392,18 @@ model NotaFiscalItem {
   quantidade  Decimal? @db.Decimal(18, 4)
   valorItem   Decimal  @db.Decimal(18, 2)
   aliqIcms    Decimal? @db.Decimal(9, 4)
+  baseIcms    Decimal? @db.Decimal(18, 2)
+  valorIcms   Decimal? @db.Decimal(18, 2)
+  valorIcmsSt Decimal? @db.Decimal(18, 2)
+  valorIpi    Decimal? @db.Decimal(18, 2)
+  /// ICMSUFDest.vICMSUFDest — DIFAL devido à UF de destino (EC 87/2015).
+  valorDifal  Decimal? @db.Decimal(18, 2)
+  aliqPis     Decimal? @db.Decimal(9, 4)
+  aliqCofins  Decimal? @db.Decimal(9, 4)
+  /// Origem da mercadoria (tabela A do CST): 0 nacional; 1, 2, 3 e 8 com conteúdo importado.
+  origemMercadoria String? @db.VarChar(1)
+  /// Grupo IBSCBS presente no item.
+  temIbsCbs   Boolean?
 
   @@index([notaId])
   @@index([ncm])
@@ -967,4 +984,54 @@ model LinhaDre {
   natureza    String? @db.VarChar(1)
 
   @@index([documentoId, dataFim])
+}
+
+/// Dados de controle de um arquivo de escrituração (SPED Fiscal, EFD-Contribuições):
+/// o que as regras de obrigação acessória precisam — prazo, atividade, Bloco K.
+model EscrituracaoArquivo {
+  id          String    @id @default(cuid())
+  documentoId String    @unique
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  competencia    String   @db.VarChar(7)
+  /// 0000 IND_ATIV: 0 industrial ou equiparado, 1 outros.
+  indAtividade   String?  @db.VarChar(1)
+  /// COM_DADOS, SEM_DADOS ou AUSENTE.
+  blocoK         String?
+  /// signingTime da assinatura digital, em UTC.
+  dataAssinatura DateTime?
+  /// 0000 COD_FIN: 0 original, 1 retificadora.
+  finalidade     String?  @db.VarChar(1)
+}
+
+/// SPED Fiscal E300/E310 — DIFAL e FCP por UF de destino.
+model ApuracaoDifal {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  competencia   String   @db.VarChar(7)
+  uf            String   @db.VarChar(2)
+  totalDebitos  Decimal  @db.Decimal(18, 2)
+  totalCreditos Decimal? @db.Decimal(18, 2)
+  aRecolher     Decimal? @db.Decimal(18, 2)
+
+  @@index([documentoId, competencia])
+}
+
+/// SPED Fiscal H005/H010 — inventário.
+model Inventario {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  /// Competência do arquivo que trouxe o inventário (em regra, fevereiro).
+  competencia    String   @db.VarChar(7)
+  dataInventario DateTime?
+  valor          Decimal? @db.Decimal(18, 2)
+  motivo         String?  @db.VarChar(2)
+  somaItens      Decimal? @db.Decimal(18, 2)
+  itens          Int
+
+  @@index([documentoId])
 }

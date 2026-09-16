@@ -10,6 +10,15 @@ import type { Money } from "@/server/tax/decimal";
  */
 export interface ParsedInvoiceItem {
   lineNumber: number;
+  /** Código do item no cadastro do emitente (XML cProd; SPED COD_ITEM). */
+  code?: string;
+  /** Alíquota de ICMS aplicada ao item, em percentual (pICMS / ALIQ_ICMS). */
+  icmsRate?: Money;
+  /** Alíquotas de PIS e COFINS destacadas no item, em percentual. */
+  pisRate?: Money;
+  cofinsRate?: Money;
+  /** Grupo IBS/CBS presente no item (Reforma Tributária, NT 2025.002). */
+  hasIbsCbs?: boolean;
   description?: string;
   ncm?: string;
   cest?: string;
@@ -83,6 +92,10 @@ export interface ParsedInvoice {
   totalPis?: Money;
   totalCofins?: Money;
   totalFcp?: Money;
+  /** indIEDest: 1 contribuinte, 2 isento, 9 não contribuinte. */
+  destIeIndicator?: string;
+  /** indFinal: operação com consumidor final. */
+  finalConsumer?: boolean;
   items: ParsedInvoiceItem[];
   /**
    * Situação do documento fiscal (SPED registro C100 campo COD_SIT / tabela
@@ -228,6 +241,38 @@ export interface ExtractionResult {
   identification?: ParsedSpedIdentification;
   /** Eventos de NF-e encontrados (cancelamento, carta de correção, manifestação). */
   eventos?: ParsedEventoNfe[];
+  /** DIFAL/FCP por UF de destino (E300/E310 do SPED Fiscal). */
+  difal?: ParsedDifal[];
+  /** Inventário (H005 e soma dos H010). */
+  inventarios?: ParsedInventario[];
+  /** Bloco K: COM_DADOS, SEM_DADOS (K001 = 1) ou AUSENTE. */
+  blocoK?: "COM_DADOS" | "SEM_DADOS" | "AUSENTE";
+  /** Data da assinatura digital do arquivo (signingTime do PKCS#7), em UTC. */
+  dataAssinatura?: Date;
   /** Quantos arquivos foram lidos, quando a origem é um pacote (.zip). */
   arquivosLidos?: number;
+}
+
+export interface ParsedDifal {
+  uf: string;
+  periodStart?: Date;
+  periodEnd?: Date;
+  /** E310 campo 04 — VL_TOT_DEBITOS_DIFAL */
+  totalDebitos?: Money;
+  /** E310 campo 06 — VL_TOT_CREDITOS_DIFAL */
+  totalCreditos?: Money;
+  /** E310 campo 10 — VL_RECOL_DIFAL */
+  aRecolher?: Money;
+}
+
+export interface ParsedInventario {
+  /** H005 DT_INV */
+  data?: Date;
+  /** H005 VL_INV */
+  valor?: Money;
+  /** H005 MOT_INV — 01 final do período, 02 mudança de tributação, ... */
+  motivo?: string;
+  /** Soma de VL_ITEM dos H010 do inventário. */
+  somaItens?: Money;
+  itens: number;
 }
