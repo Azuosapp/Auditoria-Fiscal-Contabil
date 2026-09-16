@@ -243,7 +243,7 @@ export default async function ApresentacaoPage({
   return (
     <div className="min-h-screen pb-20" style={{ background: "var(--bg)", fontSize: 14 }}>
       {/* ------------------------------------------------------------ Capa */}
-      <header className="pb-24 pt-6 text-white" style={{ background: "var(--azuos-hero)" }}>
+      <header className="pb-12 pt-6 text-white" style={{ background: "var(--azuos-hero)" }}>
         <div className={`${CONTAINER} flex items-center justify-between gap-4`}>
           <div className="flex items-center">
             {/* O PNG tem margem interna (≈7% à esquerda, 23% em cima e embaixo): compensada para alinhar as letras à grade. */}
@@ -286,7 +286,7 @@ export default async function ApresentacaoPage({
           </nav>
         </div>
 
-        <div className={`${CONTAINER} mt-12 flex flex-wrap items-end justify-between gap-x-10 gap-y-6`}>
+        <div className={`${CONTAINER} mt-10 grid items-center gap-x-10 gap-y-6 lg:grid-cols-[minmax(0,1fr)_auto]`}>
           <div className="min-w-0">
             <div className="flex items-center gap-3 text-[13px] font-semibold uppercase tracking-[2px] text-white/75">
               <span className="h-1 w-10 rounded-full" style={{ background: "var(--azuos-yellow)" }} />
@@ -304,20 +304,24 @@ export default async function ApresentacaoPage({
               ))}
             </div>
           </div>
-          <dl className="grid shrink-0 grid-cols-2 gap-x-8 gap-y-1 text-[13px]">
-            <dt className="text-white/60">Período analisado</dt>
-            <dt className="text-white/60">Data da análise</dt>
-            <dd className="text-[16px] font-bold tabular-nums">
-              {competencia(d.auditoria.competenciaIni)} a {competencia(d.auditoria.competenciaFim)}
-            </dd>
-            <dd className="text-[16px] font-bold tabular-nums">
-              {d.auditoria.executadaEm ? d.auditoria.executadaEm.toLocaleDateString("pt-BR") : "—"}
-            </dd>
+          <dl className="flex shrink-0 justify-self-start divide-x lg:justify-self-end divide-white/15 rounded-2xl border border-white/15 bg-white/10 text-center">
+            <div className="px-7 py-4">
+              <dt className="text-[12px] font-semibold uppercase tracking-[1px] text-white/65">Período analisado</dt>
+              <dd className="mt-1 whitespace-nowrap text-[18px] font-bold tabular-nums">
+                {competencia(d.auditoria.competenciaIni)} a {competencia(d.auditoria.competenciaFim)}
+              </dd>
+            </div>
+            <div className="px-7 py-4">
+              <dt className="text-[12px] font-semibold uppercase tracking-[1px] text-white/65">Data da análise</dt>
+              <dd className="mt-1 whitespace-nowrap text-[18px] font-bold tabular-nums">
+                {d.auditoria.executadaEm ? d.auditoria.executadaEm.toLocaleDateString("pt-BR") : "—"}
+              </dd>
+            </div>
           </dl>
         </div>
       </header>
 
-      <main className={`${CONTAINER} -mt-14`}>
+      <main className={`${CONTAINER} mt-8`}>
         {/* ------------------------------------------------------------ Números */}
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <Numero
