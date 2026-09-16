@@ -348,10 +348,10 @@ const FAMILIA_B: DefinicaoAchado[] = [
       "aponta outro emitente — a nota é de entrada e foi escriturada como " +
       "venda. Infla a receita e o débito de ICMS do período.",
     exemplo:
-      "A nota 000906607, chave 52260406980064009562550010009066071, foi " +
-      "emitida pelo CNPJ 06.980.064/0095-62 (fornecedor de GLP) e escriturada " +
-      "com IND_OPER 1 e CFOP 5660 — como se fosse venda da própria empresa, " +
-      "somando R$ 6.673,97 indevidos à receita de 04/2026.",
+      "A nota 12345, emitida por um fornecedor de combustível (CNPJ " +
+      "11.222.333/0001-81), foi escriturada com IND_OPER 1 e CFOP 5660 — como " +
+      "se fosse venda da própria empresa —, somando R$ 5.000,00 indevidos à " +
+      "receita do mês.",
     baseLegal: [
       "Guia Prático da EFD ICMS/IPI — registro C100, campo IND_OPER",
       "Ajuste SINIEF 02/2009",

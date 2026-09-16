@@ -38,7 +38,7 @@ describe("classificar — SPED pelo conteúdo", () => {
   });
 
   it("recibo de entrega do SPED é reconhecido, não vira desconhecido", () => {
-    const rec = "RCP010790365200018524022026141555B11FE32DF6684731C4F1E969F693B1E1855B0F47";
+    const rec = "RCP011234567800019924022026141555B11FE32DF6684731C4F1E969F693B1E1855B0F47";
     const r = classificar(buf(rec), "PISCOFINS_20260101.rec");
     expect(r.tipo).toBe("RECIBO_ENTREGA");
   });
