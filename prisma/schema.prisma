@@ -268,6 +268,9 @@ model Documento {
   apuracoesContrib  ApuracaoContribuicoes[]
   lancamentos       LancamentoContabil[]
   linhasDre         LinhaDre[]
+  contasContabeis   ContaContabil[]
+  linhasEcf         LinhaEcf[]
+  sociosEcf         SocioEcf[]
   escrituracao      EscrituracaoArquivo?
   difal             ApuracaoDifal[]
   inventarios       Inventario[]
@@ -512,6 +515,8 @@ model LancamentoContabil {
   natureza    String  @db.VarChar(1)
   valor       Decimal @db.Decimal(18, 2)
   historico   String?
+  /// I200 IND_LCTO: N normal, E encerramento do exercício, X extemporâneo.
+  tipoLancamento String? @db.VarChar(1)
 
   linhaOrigem Int?
 
@@ -1032,6 +1037,76 @@ model Inventario {
   motivo         String?  @db.VarChar(2)
   somaItens      Decimal? @db.Decimal(18, 2)
   itens          Int
+
+  @@index([documentoId])
+}
+
+/// ECD I050/I051 — plano de contas com natureza, tipo, nível e referencial.
+model ContaContabil {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  codigo         String
+  nome           String
+  /// COD_NAT: 01 ativo, 02 passivo, 03 patrimônio líquido, 04 resultado, 05 compensação, 09 outras.
+  natureza       String  @db.VarChar(2)
+  /// S sintética, A analítica.
+  tipo           String  @db.VarChar(1)
+  nivel          Int
+  codigoSuperior String?
+  /// Conta do plano referencial da Receita (I051).
+  referencial    String?
+
+  @@unique([documentoId, codigo])
+  @@index([documentoId, referencial])
+}
+
+/// ECF — linhas dos demonstrativos e apurações (L100, L300, M300, M350, N500,
+/// N630, N650, N670, P100, P150, P300, P500), só as de valor informado.
+model LinhaEcf {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  exercicio   Int
+  /// Período do bloco: A00 anual, T01 a T04 trimestral, A01 a A12 estimativa.
+  periodo     String  @db.VarChar(3)
+  dataFim     DateTime
+  registro    String  @db.VarChar(4)
+  codigo      String
+  descricao   String
+  valor       Decimal? @db.Decimal(18, 2)
+  /// D ou C, quando o registro informa.
+  indicador   String?  @db.VarChar(1)
+  valorInicial     Decimal? @db.Decimal(18, 2)
+  indicadorInicial String?  @db.VarChar(1)
+  debitos     Decimal? @db.Decimal(18, 2)
+  creditos    Decimal? @db.Decimal(18, 2)
+
+  @@index([documentoId, registro, codigo])
+}
+
+/// ECF Y600 — quadro societário do exercício, com as remunerações pagas a cada sócio.
+model SocioEcf {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  exercicio          Int
+  dataEntrada        DateTime?
+  dataSaida          DateTime?
+  tipoPessoa         String?  @db.VarChar(2)
+  documentoSocio     String
+  nome               String
+  qualificacao       String?
+  percentualCapital  Decimal? @db.Decimal(9, 4)
+  percentualVotante  Decimal? @db.Decimal(9, 4)
+  remuneracaoTrabalho Decimal? @db.Decimal(18, 2)
+  lucrosDividendos   Decimal? @db.Decimal(18, 2)
+  jurosCapital       Decimal? @db.Decimal(18, 2)
+  demaisRendimentos  Decimal? @db.Decimal(18, 2)
+  irRetido           Decimal? @db.Decimal(18, 2)
 
   @@index([documentoId])
 }

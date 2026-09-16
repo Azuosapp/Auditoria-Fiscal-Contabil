@@ -54,6 +54,16 @@ export interface LancamentoExtraido {
   linhaOrigem: number;
 }
 
+export interface ContaExtraida {
+  codigo: string;
+  nome: string;
+  natureza: string;
+  tipo: string;
+  nivel: number;
+  codigoSuperior?: string;
+  referencial?: string;
+}
+
 export interface LinhaDreExtraida {
   dataInicio: Date;
   dataFim: Date;
@@ -70,6 +80,7 @@ export interface EcdExtraida {
   cnpj?: string;
   dataInicio?: Date;
   dataFim?: Date;
+  contas: ContaExtraida[];
   saldos: SaldoContaExtraido[];
   lancamentos: LancamentoExtraido[];
   dre: LinhaDreExtraida[];
@@ -109,7 +120,8 @@ export function parseEcd(buffer: Buffer): EcdExtraida | null {
   const { text } = decodeTextBuffer(buffer);
   if (!ehEcd(text)) return null;
 
-  const r: EcdExtraida = { saldos: [], lancamentos: [], dre: [], avisos: [] };
+  const r: EcdExtraida = { contas: [], saldos: [], lancamentos: [], dre: [], avisos: [] };
+  const contas = new Map<string, ContaExtraida>();
 
   const nomes = new Map<string, string>();
   const referencial = new Map<string, string>();
@@ -136,7 +148,17 @@ export function parseEcd(buffer: Buffer): EcdExtraida | null {
 
       case "I050":
         ultimaConta = f[6];
-        if (f[6]) nomes.set(f[6], f[8] ?? "");
+        if (f[6]) {
+          nomes.set(f[6], f[8] ?? "");
+          contas.set(f[6], {
+            codigo: f[6],
+            nome: (f[8] ?? "").trim(),
+            natureza: f[3] ?? "",
+            tipo: f[4] ?? "",
+            nivel: Number(f[5]) || 0,
+            codigoSuperior: f[7] || undefined,
+          });
+        }
         break;
 
       case "I051": {
@@ -230,6 +252,7 @@ export function parseEcd(buffer: Buffer): EcdExtraida | null {
     });
   }
   for (const l of r.lancamentos) l.contaNome = nomes.get(l.contaCodigo);
+  for (const c of contas.values()) r.contas.push({ ...c, referencial: referencial.get(c.codigo) });
 
   if (r.saldos.length === 0) r.avisos.push("ECD sem saldos periódicos (I155).");
   return r;

@@ -1012,6 +1012,231 @@ const FAMILIA_F: DefinicaoAchado[] = [
 /** Família G — obrigações acessórias. */
 const FAMILIA_G: DefinicaoAchado[] = [
   {
+    codigo: "F04",
+    area: "CONTABIL",
+    titulo: "Saldo com natureza invertida",
+    familia: "CONTABIL",
+    severidade: "MEDIO",
+    tributo: null,
+    fontesNecessarias: ["ECD"],
+    descricao:
+      "Conta de ativo com saldo credor, ou de passivo e patrimônio líquido com saldo devedor, no fechamento mensal. Contas redutoras, prejuízos, lucros distribuídos e adiantamentos ficam de fora; caixa credor é a F01.",
+    exemplo:
+      "A conta 211110031 FORNECEDOR ALFA LTDA, de fornecedores, fecha 06/2025 com saldo devedor de R$ 3.200,00.",
+    baseLegal: ["NBC TG Estrutura Conceitual", "ITG 2000 (R1) — Escrituração Contábil"],
+    textoCliente: "A contabilidade tem contas com saldo invertido, sinal de lançamento em conta errada ou de registro faltante.",
+  },
+  {
+    codigo: "F06",
+    area: "CONTABIL",
+    titulo: "Saldo que não decorre do mês anterior e do movimento",
+    familia: "CONTABIL",
+    severidade: "ALTO",
+    tributo: null,
+    fontesNecessarias: ["ECD"],
+    descricao:
+      "No I155, o saldo final do mês não é o final do mês anterior mais os débitos menos os créditos, ou mês sem movimento muda de saldo.",
+    exemplo:
+      "A conta 111110001 Caixa fecha 04/2025 com R$ 50.000,00 devedor, tem R$ 10.000,00 de débitos em 05/2025 e fecha maio com R$ 70.000,00.",
+    baseLegal: ["ITG 2000 (R1) — Escrituração Contábil", "Manual de Orientação da ECD — registro I155"],
+    textoCliente: "O balancete tem saldos que não resultam do movimento: foi alterado depois de fechado.",
+  },
+  {
+    codigo: "F07",
+    area: "CONTABIL",
+    titulo: "Balanço da ECF diferente do registrado na ECD",
+    familia: "CONTABIL",
+    severidade: "ALTO",
+    tributo: "IRPJ_CSLL",
+    fontesNecessarias: ["ECD", "ECF"],
+    descricao:
+      "Linha analítica do L100/P100 da ECF com saldo final diferente da soma das contas da ECD mapeadas para o mesmo código referencial.",
+    exemplo:
+      "A linha 1.01.01.01.01 (Caixa) do L100 de 31/12/2025 informa R$ 120.000,00, e a conta de caixa da ECD fecha 12/2025 com R$ 298.597,47.",
+    baseLegal: ["IN RFB nº 2.004/2021 (ECF)", "Manual de Orientação da ECF — registro L100"],
+    textoCliente: "O balanço entregue na ECF não é o da contabilidade registrada na ECD.",
+  },
+  {
+    codigo: "F08",
+    area: "CONTABIL",
+    titulo: "Plano de contas sem referencial ou com classificação incompatível",
+    familia: "CONTABIL",
+    severidade: "BAIXO",
+    tributo: null,
+    fontesNecessarias: ["ECD"],
+    descricao:
+      "Conta analítica com saldo sem mapeamento ao plano referencial (I051), com natureza do I050 diferente do grupo do referencial, ou com nome que contradiz o grupo (fornecedor no ativo, imposto a recuperar no passivo).",
+    exemplo:
+      "A conta 211310099 ICMS A RECUPERAR está no passivo (natureza 02) em 12/2025, mapeada para o referencial 2.01.01.09.03.",
+    baseLegal: ["Manual de Orientação da ECD — registros I050 e I051"],
+    textoCliente: "O plano de contas tem contas sem classificação ou em grupo errado.",
+  },
+  {
+    codigo: "F10",
+    area: "CONTABIL",
+    titulo: "Remuneração e lucros dos sócios diferentes do Y600 da ECF",
+    familia: "CONTABIL",
+    severidade: "ALTO",
+    tributo: "IRPJ_CSLL",
+    fontesNecessarias: ["ECD", "ECF"],
+    descricao:
+      "Pró-labore e lucros distribuídos lançados na ECD diferentes dos valores informados por sócio no Y600 da ECF, ou lucros distribuídos em proporção diferente da participação no capital.",
+    exemplo:
+      "A ECD de 2025 lança R$ 36.432,00 de pró-labore, e o Y600 da ECF informa remuneração zero ao único sócio, com 100% do capital.",
+    baseLegal: ["IN RFB nº 2.004/2021 (ECF) — registro Y600", "Lei nº 9.249/1995, art. 10"],
+    textoCliente: "O que a contabilidade pagou aos sócios não é o que foi declarado na ECF.",
+  },
+  {
+    codigo: "F11",
+    area: "CONTABIL",
+    titulo: "Depreciação ausente, acima do custo ou acima da taxa",
+    familia: "CONTABIL",
+    severidade: "MEDIO",
+    tributo: "IRPJ_CSLL",
+    fontesNecessarias: ["ECD"],
+    descricao:
+      "Bem do imobilizado não totalmente depreciado sem nenhuma depreciação lançada no exercício, depreciação acumulada maior que o custo, ou taxa efetiva acima da usual (esta com confiança média).",
+    exemplo:
+      "A conta 121110005 VEICULOS tem custo de R$ 85.451,85 e depreciação acumulada de R$ 15.784,56, sem nenhuma depreciação lançada em 2025.",
+    baseLegal: ["NBC TG 27 — Ativo Imobilizado", "IN RFB nº 1.700/2017, Anexo III"],
+    textoCliente: "Parte do imobilizado não foi depreciada ou foi depreciada além do permitido.",
+  },
+  {
+    codigo: "F12",
+    area: "CONTABIL",
+    titulo: "Passivo sem movimentação no exercício",
+    familia: "CONTABIL",
+    severidade: "ALTO",
+    tributo: "IRPJ_CSLL",
+    fontesNecessarias: ["ECD"],
+    descricao:
+      "Fornecedor ou obrigação de curto prazo com saldo credor a partir de R$ 1.000,00 sem nenhum débito ou crédito em todos os meses do exercício. É o retrato do passivo fictício.",
+    exemplo:
+      "O fornecedor 211110019 FORNECEDOR BETA LTDA mantém R$ 105.752,14 de 01/2025 a 12/2025 sem um único lançamento.",
+    baseLegal: ["Lei nº 9.430/1996, art. 40"],
+    textoCliente: "A empresa mantém obrigações que não são pagas nem movimentadas, presumidas receita omitida.",
+  },
+  {
+    codigo: "F13",
+    area: "CONTABIL",
+    titulo: "Despesas de funcionamento e honorários contábeis não escriturados",
+    familia: "CONTABIL",
+    severidade: "MEDIO",
+    tributo: null,
+    fontesNecessarias: ["ECD"],
+    descricao:
+      "Energia, água, telefone e aluguel lançados só em parte dos meses, nenhuma dessas despesas no exercício, ou nenhum honorário contábil lançado apesar de a escrituração ser feita por contador.",
+    exemplo:
+      "A ECD de 2025 não tem nenhum lançamento de honorários contábeis nos 12 meses, e a conta de energia não tem lançamento em 03/2025 nem em 08/2025.",
+    baseLegal: ["ITG 2000 (R1) — Escrituração Contábil", "NBC TG Estrutura Conceitual — regime de competência"],
+    textoCliente: "Despesas de funcionamento não foram contabilizadas, sinal de pagamentos por fora da contabilidade.",
+  },
+  {
+    codigo: "F14",
+    area: "CONTABIL",
+    titulo: "Obrigação de folha sem folha escriturada",
+    familia: "CONTABIL",
+    severidade: "MEDIO",
+    tributo: null,
+    fontesNecessarias: ["ECD"],
+    descricao:
+      "Sem salário, férias ou 13º lançados no exercício, a empresa mantém saldo em FGTS, salários, férias ou 13º a pagar. Pró-labore e o INSS dele não contam como folha.",
+    exemplo:
+      "Sem nenhum salário lançado em 2025, a conta 211210003 FGTS A RECOLHER mantém R$ 1.952,77 de 01/2025 a 12/2025.",
+    baseLegal: ["ITG 2000 (R1) — Escrituração Contábil"],
+    textoCliente: "Há obrigações de folha no balanço de uma empresa sem folha escriturada.",
+  },
+  {
+    codigo: "F16",
+    area: "CONTABIL",
+    titulo: "Caixa elevado ou conta bancária sempre zerada",
+    familia: "CONTABIL",
+    severidade: "MEDIO",
+    tributo: null,
+    fontesNecessarias: ["ECD"],
+    descricao:
+      "Caixa acima da receita média mensal e de R$ 50.000,00 em três meses ou mais, ou conta corrente com movimento e saldo final zero em todos os meses.",
+    exemplo:
+      "O caixa fecha 01/2025 com R$ 667.265,19 para receita média de R$ 324.327,82 por mês, e a conta BANCO BRASIL C/C fecha os 12 meses de 2025 em R$ 0,00.",
+    baseLegal: ["Lei nº 9.430/1996, art. 42", "ITG 2000 (R1) — Escrituração Contábil"],
+    textoCliente: "O caixa e o banco da contabilidade não refletem o dinheiro real da empresa.",
+  },
+  {
+    codigo: "F18",
+    area: "CONTABIL",
+    titulo: "Empréstimo a empresa ou pessoa ligada no ativo",
+    familia: "CONTABIL",
+    severidade: "MEDIO",
+    tributo: null,
+    fontesNecessarias: ["ECD"],
+    descricao:
+      "Conta de empréstimo, mútuo ou partes relacionadas no ativo com saldo devedor a partir de R$ 1.000,00. Sem contrato e juros é distribuição disfarçada; entre pessoas jurídicas, o mútuo sofre IOF.",
+    exemplo:
+      "A conta 113510002 EMPRESTIMO A EMPRESAS LIGADAS fecha 12/2025 com R$ 240.000,00 devedor, sem receita de juros no exercício.",
+    baseLegal: ["Decreto nº 6.306/2007, art. 7º (IOF sobre mútuo)", "RIR/2018 — distribuição disfarçada de lucros"],
+    textoCliente: "A empresa tem dinheiro emprestado a pessoas ou empresas ligadas.",
+  },
+  {
+    codigo: "F19",
+    area: "CONTABIL",
+    titulo: "Estoque do balanço diferente do inventário do Bloco H",
+    familia: "CONTABIL",
+    severidade: "ALTO",
+    tributo: "IRPJ_CSLL",
+    fontesNecessarias: ["ECD", "SPED_FISCAL"],
+    descricao:
+      "Saldo das contas de estoque em 31/12 diferente do valor do inventário (H005) informado na EFD ICMS/IPI.",
+    exemplo:
+      "O balanço de 31/12/2025 tem R$ 335.570,15 em estoque, e o H005 da EFD de 02/2026 informa inventário de R$ 410.000,00.",
+    baseLegal: ["RIR/2018 — custo das mercadorias vendidas", "Guia Prático da EFD ICMS/IPI — Bloco H"],
+    textoCliente: "O estoque da contabilidade não é o inventário declarado ao fisco.",
+  },
+  {
+    codigo: "F20",
+    area: "CONTABIL",
+    titulo: "IRPJ/CSLL contabilizado diferente do apurado na ECF",
+    familia: "CONTABIL",
+    severidade: "MEDIO",
+    tributo: "IRPJ_CSLL",
+    fontesNecessarias: ["ECD", "ECF"],
+    descricao:
+      "A despesa de IRPJ ou CSLL do trimestre (ou do ano) na ECD é diferente do imposto apurado na ECF (N630/N670 ou P300/P500) para o mesmo período.",
+    exemplo:
+      "No 1º trimestre de 2025 a ECD lança R$ 1.917,60 de IRPJ, e a ECF apura R$ 1.457,38.",
+    baseLegal: ["NBC TG 32 — Tributos sobre o Lucro", "IN RFB nº 2.004/2021 (ECF)"],
+    textoCliente: "O IRPJ e a CSLL da contabilidade não são os apurados na ECF.",
+  },
+  {
+    codigo: "F21",
+    area: "CONTABIL",
+    titulo: "Tributo provisionado no balanço sem confissão em DCTF",
+    familia: "CONTABIL",
+    severidade: "CRITICO",
+    tributo: null,
+    fontesNecessarias: ["ECD", "DCTF"],
+    descricao:
+      "Crédito na conta de IRPJ, CSLL, PIS, COFINS ou IPI a recolher em competência sem DCTF com o mesmo tributo, ou com valor confessado diferente. O débito existe só no balanço.",
+    exemplo:
+      "A ECD provisiona R$ 1.267,74 de IRPJ no 4º trimestre de 2025, e nenhuma DCTF confessa IRPJ para 12/2025.",
+    baseLegal: ["IN RFB nº 2.237/2024 (DCTFWeb e DCTF)", "Lei nº 9.430/1996, art. 44 (multa de ofício)"],
+    textoCliente: "Há tributo reconhecido na contabilidade que não foi declarado em DCTF.",
+  },
+  {
+    codigo: "F22",
+    area: "CONTABIL",
+    titulo: "ICMS, PIS ou COFINS contabilizado diferente do apurado nos SPED",
+    familia: "CONTABIL",
+    severidade: "MEDIO",
+    tributo: null,
+    fontesNecessarias: ["ECD"],
+    descricao:
+      "Crédito do mês na conta de ICMS, PIS ou COFINS a recolher diferente do débito do E110 da EFD ICMS/IPI ou da contribuição apurada no M210/M610 da EFD-Contribuições.",
+    exemplo:
+      "Em 03/2025 o E110 apura R$ 42.310,00 de débitos de ICMS, e a conta ICMS NORMAL A RECOLHER recebe R$ 38.900,00 de créditos no mês.",
+    baseLegal: ["ITG 2000 (R1) — Escrituração Contábil", "Guia Prático da EFD ICMS/IPI — registro E110"],
+    textoCliente: "Os impostos da contabilidade não são os apurados nos SPED.",
+  },
+  {
     codigo: "G02",
     area: "FISCAL",
     titulo: "Obrigação acessória não entregue em exercício obrigatório",

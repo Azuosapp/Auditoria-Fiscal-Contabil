@@ -42,6 +42,36 @@ export interface ApuracaoEcfExtraida {
   registroOrigem: string;
 }
 
+export interface LinhaEcfExtraida {
+  periodo: string;
+  dataFim: Date;
+  registro: string;
+  codigo: string;
+  descricao: string;
+  valor?: Prisma.Decimal;
+  indicador?: string;
+  valorInicial?: Prisma.Decimal;
+  indicadorInicial?: string;
+  debitos?: Prisma.Decimal;
+  creditos?: Prisma.Decimal;
+}
+
+export interface SocioEcfExtraido {
+  dataEntrada?: Date;
+  dataSaida?: Date;
+  tipoPessoa?: string;
+  documentoSocio: string;
+  nome: string;
+  qualificacao?: string;
+  percentualCapital?: Prisma.Decimal;
+  percentualVotante?: Prisma.Decimal;
+  remuneracaoTrabalho?: Prisma.Decimal;
+  lucrosDividendos?: Prisma.Decimal;
+  jurosCapital?: Prisma.Decimal;
+  demaisRendimentos?: Prisma.Decimal;
+  irRetido?: Prisma.Decimal;
+}
+
 export interface EcfExtraida {
   cnpj?: string;
   exercicio?: number;
@@ -49,6 +79,8 @@ export interface EcfExtraida {
   formaTributacao?: string;
   formaApuracao?: string;
   apuracoes: ApuracaoEcfExtraida[];
+  linhas: LinhaEcfExtraida[];
+  socios: SocioEcfExtraido[];
   avisos: string[];
 }
 
@@ -86,7 +118,10 @@ export function parseEcf(buffer: Buffer): EcfExtraida | null {
   if (!ehEcf(text)) return null;
 
   const avisos: string[] = [];
-  const resultado: EcfExtraida = { apuracoes: [], avisos };
+  const resultado: EcfExtraida = { apuracoes: [], linhas: [], socios: [], avisos };
+  // Período do bloco em curso (L030, M030, N030, P030) para as linhas genéricas.
+  let blocoPeriodo: { per: string; fim: Date } | undefined;
+  const naoVazio = (v: Prisma.Decimal | undefined) => (v && !v.isZero() ? v : undefined);
 
   // Valores do período corrente, por bloco. Fecham quando o próximo período abre.
   interface Periodo {
@@ -117,7 +152,60 @@ export function parseEcf(buffer: Buffer): EcfExtraida | null {
     const f = linha.split("|");
     const reg = f[1];
 
+    // Abertura de período em qualquer bloco que as linhas genéricas usam.
+    if (reg === "L030" || reg === "M030" || reg === "N030" || reg === "P030") {
+      const fim = data(f[3]);
+      blocoPeriodo = fim ? { per: f[4] ?? "", fim } : undefined;
+    }
+    if (blocoPeriodo) {
+      const base = { periodo: blocoPeriodo.per, dataFim: blocoPeriodo.fim, registro: reg, codigo: f[2] ?? "", descricao: (f[3] ?? "").trim() };
+      if (reg === "L100" || reg === "P100") {
+        const valor = dec(f[12]);
+        const valorInicial = dec(f[8]);
+        if (naoVazio(valor) || naoVazio(valorInicial)) {
+          resultado.linhas.push({
+            ...base,
+            valor,
+            indicador: f[13] || undefined,
+            valorInicial,
+            indicadorInicial: f[9] || undefined,
+            debitos: dec(f[10]),
+            creditos: dec(f[11]),
+          });
+        }
+      } else if (reg === "L300" || reg === "P150") {
+        const valor = dec(f[8]);
+        if (naoVazio(valor)) resultado.linhas.push({ ...base, valor, indicador: f[9] || undefined });
+      } else if (reg === "M300" || reg === "M350") {
+        const valor = dec(f[6]);
+        if (naoVazio(valor)) resultado.linhas.push({ ...base, valor });
+      } else if (["N500", "N630", "N650", "N670", "P300", "P500"].includes(reg)) {
+        const valor = dec(f[4]);
+        if (naoVazio(valor)) resultado.linhas.push({ ...base, valor });
+      }
+    }
+
     switch (reg) {
+      case "Y600": {
+        const documentoSocio = (f[6] ?? "").replace(/\D/g, "");
+        if (!documentoSocio) break;
+        resultado.socios.push({
+          dataEntrada: data(f[2]),
+          dataSaida: data(f[3]),
+          tipoPessoa: f[5] || undefined,
+          documentoSocio,
+          nome: (f[7] ?? "").trim(),
+          qualificacao: f[8] || undefined,
+          percentualCapital: dec(f[9]),
+          percentualVotante: dec(f[10]),
+          remuneracaoTrabalho: dec(f[13]),
+          lucrosDividendos: dec(f[14]),
+          jurosCapital: dec(f[15]),
+          demaisRendimentos: dec(f[16]),
+          irRetido: dec(f[17]),
+        });
+        break;
+      }
       case "0000": {
         resultado.cnpj = f[4]?.replace(/\D/g, "") || undefined;
         resultado.exercicio = data(f[10])?.getUTCFullYear();

@@ -529,7 +529,19 @@ export async function persistirEcf(
   ecf: EcfExtraida,
 ): Promise<number> {
   await tx.apuracaoEcf.deleteMany({ where: { documentoId } });
-  if (!ecf.exercicio || ecf.apuracoes.length === 0) return 0;
+  await tx.linhaEcf.deleteMany({ where: { documentoId } });
+  await tx.socioEcf.deleteMany({ where: { documentoId } });
+  if (!ecf.exercicio) return 0;
+  const exercicio = ecf.exercicio;
+  for (let i = 0; i < ecf.linhas.length; i += 2000) {
+    await tx.linhaEcf.createMany({
+      data: ecf.linhas.slice(i, i + 2000).map((l) => ({ documentoId, exercicio, ...l })),
+    });
+  }
+  if (ecf.socios.length > 0) {
+    await tx.socioEcf.createMany({ data: ecf.socios.map((s) => ({ documentoId, exercicio, ...s })) });
+  }
+  if (ecf.apuracoes.length === 0) return 0;
   await tx.apuracaoEcf.createMany({
     data: ecf.apuracoes.map((a) => ({
       documentoId,
@@ -559,7 +571,15 @@ export async function persistirEcd(
     prisma.saldoConta.deleteMany({ where: { documentoId } }),
     prisma.lancamentoContabil.deleteMany({ where: { documentoId } }),
     prisma.linhaDre.deleteMany({ where: { documentoId } }),
+    prisma.contaContabil.deleteMany({ where: { documentoId } }),
   ]);
+
+  for (let i = 0; i < ecd.contas.length; i += 2000) {
+    await prisma.contaContabil.createMany({
+      data: ecd.contas.slice(i, i + 2000).map((c) => ({ documentoId, ...c })),
+      skipDuplicates: true,
+    });
+  }
 
   const LOTE = 2000;
   for (let i = 0; i < ecd.saldos.length; i += LOTE) {
@@ -580,6 +600,7 @@ export async function persistirEcd(
         natureza: l.natureza,
         valor: l.valor,
         historico: l.historico,
+        tipoLancamento: l.tipoLancamento,
         linhaOrigem: l.linhaOrigem,
       })),
     });
