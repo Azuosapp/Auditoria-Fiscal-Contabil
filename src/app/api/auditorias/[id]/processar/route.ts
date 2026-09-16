@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { processarAuditoria } from "@/server/processamento/processar";
 import { auditar } from "@/server/auditoria/motor";
+import {
+  analiseAutomaticaLigada,
+  solicitarAnaliseIa,
+} from "@/server/claude/analise";
 
 export const runtime = "nodejs";
 // Cinco anos de XMLs levam minutos, não segundos.
@@ -27,7 +31,17 @@ export async function POST(
     // extração. Separar em dois cliques só adiaria o resultado.
     const auditoria = await auditar(params.id);
 
-    return NextResponse.json({ extracao, auditoria });
+    // Análise do Claude a cada importação. Só quando entrou arquivo novo (ou foi
+    // pedido o reprocessamento): reauditar por mudança de catálogo não muda os
+    // dados, e rodar de novo gastaria o limite da conta sem nada novo a ver.
+    const houveArquivoNovo =
+      extracao !== null && (extracao.processados > 0 || reprocessarTudo);
+    const analiseIa =
+      houveArquivoNovo && analiseAutomaticaLigada()
+        ? await solicitarAnaliseIa(params.id)
+        : null;
+
+    return NextResponse.json({ extracao, auditoria, analiseIa });
   } catch (e) {
     return NextResponse.json({ erro: (e as Error).message }, { status: 400 });
   }

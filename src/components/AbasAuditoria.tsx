@@ -17,6 +17,7 @@ const ABAS = [
   { sufixo: "/fiscal", rotulo: "Fiscal" },
   { sufixo: "/contabil", rotulo: "Contábil" },
   { sufixo: "/situacao-fiscal", rotulo: "Situação fiscal" },
+  { sufixo: "/analise-ia", rotulo: "Análise do Claude" },
   { sufixo: "/relatorio", rotulo: "Relatório" },
 ];
 

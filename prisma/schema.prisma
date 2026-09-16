@@ -176,6 +176,7 @@ model Auditoria {
   achados       Achado[]
   relatorios    Relatorio[]
   lacunas       Lacuna[]
+  analisesIa    AnaliseIa[]
 
   @@index([empresaId])
   @@index([status])
@@ -879,4 +880,63 @@ model LoteImportacao {
   confirmadoEm DateTime?
 
   @@index([status])
+}
+
+// ---------- Análise do Claude ----------
+
+enum StatusAnaliseIa {
+  EM_ANDAMENTO
+  CONCLUIDA
+  /// O teto de gasto foi atingido antes do fim: o que veio é parcial ou nada.
+  LIMITE_ATINGIDO
+  ERRO
+}
+
+/// Uma rodada da análise tributária feita pelo Claude sobre a auditoria.
+///
+/// Fica separada de `Achado` de propósito: achado é regra programada e testada,
+/// com número reproduzível; apontamento do Claude é leitura de um auditor, a
+/// confirmar. Misturar os dois faria o relatório tratar hipótese como cálculo.
+model AnaliseIa {
+  id          String    @id @default(cuid())
+  auditoriaId String
+  auditoria   Auditoria @relation(fields: [auditoriaId], references: [id], onDelete: Cascade)
+
+  status      StatusAnaliseIa @default(EM_ANDAMENTO)
+  modelo      String?
+  iniciadaEm  DateTime        @default(now())
+  concluidaEm DateTime?
+  duracaoSeg  Int?
+  /// Custo a preço de tabela informado pelo Claude Code. Na assinatura não é
+  /// cobrado em dinheiro, mas mede o consumo do limite — e é a base do teto.
+  custoUsd    Decimal? @db.Decimal(10, 4)
+  resumo      String?  @db.Text
+  documentosFaltantes String[] @default([])
+  erro        String?  @db.Text
+
+  apontamentos ApontamentoIa[]
+
+  @@index([auditoriaId, iniciadaEm])
+}
+
+model ApontamentoIa {
+  id        String    @id @default(cuid())
+  analiseId String
+  analise   AnaliseIa @relation(fields: [analiseId], references: [id], onDelete: Cascade)
+
+  ordem         Int
+  titulo        String
+  severidade    Severidade
+  area          AreaAchado
+  confianca     Confianca
+  tributo       String?
+  competencias  String[] @default([])
+  valorEstimado Decimal? @db.Decimal(18, 2)
+  descricao     String   @db.Text
+  recomendacao  String?  @db.Text
+  baseLegal     String[] @default([])
+  /// [{ arquivo, localizacao, detalhe, valor }] — onde conferir.
+  evidencias    Json
+
+  @@index([analiseId])
 }

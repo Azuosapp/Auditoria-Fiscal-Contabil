@@ -35,6 +35,8 @@ interface Auditoria {
 interface Resposta {
   extracao: Extracao | null;
   auditoria: Auditoria;
+  /** "agendada" ou "repetira" quando a análise do Claude foi disparada. */
+  analiseIa?: string | null;
 }
 
 const ROTULO_NIVEL: Record<string, string> = {
@@ -125,6 +127,20 @@ export function BotaoProcessar({
           style={{ background: "#fee2e2", color: "#b91c1c" }}
         >
           {erro}
+        </div>
+      ) : null}
+
+      {resposta?.analiseIa ? (
+        <div
+          className="mt-2 rounded-md px-3 py-2 text-[11px]"
+          style={{ background: "#eff6ff", color: "#1e3a8a" }}
+        >
+          <strong>A análise do Claude começou</strong> em segundo plano e leva alguns
+          minutos. Acompanhe na aba{" "}
+          <a className="underline" href={`/auditorias/${auditoriaId}/analise-ia`}>
+            Análise do Claude
+          </a>
+          .
         </div>
       ) : null}
 
