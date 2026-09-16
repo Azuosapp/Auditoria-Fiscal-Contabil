@@ -855,6 +855,113 @@ const FAMILIA_G: DefinicaoAchado[] = [
       "Não há registro de entrega da obrigação em {competencia}. A multa por falta de entrega é autônoma e continua correndo.",
   },
   {
+    codigo: "G05",
+    area: "FISCAL",
+    titulo: "Escrituração mensal não entregue em mês com faturamento",
+    familia: "ACESSORIA",
+    severidade: "ALTO",
+    tributo: null,
+    fontesNecessarias: ["NFE_XML"],
+    descricao:
+      "A empresa entrega a EFD ICMS/IPI ou a EFD-Contribuições nos demais meses, mas " +
+      "não há arquivo de um mês em que emitiu NF-e de saída.",
+    exemplo:
+      "Há EFD-Contribuições de janeiro a junho; julho não veio, e no mês a empresa " +
+      "emitiu 2 notas somando R$ 65.200,00.",
+    baseLegal: [
+      "Ajuste SINIEF nº 02/2009",
+      "RCTE-GO, art. 356-N",
+      "IN RFB nº 1.252/2012, art. 4º",
+    ],
+    textoCliente: "A escrituração de {competencia} não foi localizada, embora haja faturamento no mês.",
+  },
+  {
+    codigo: "G06",
+    area: "FISCAL",
+    titulo: "EFD ICMS/IPI entregue depois do prazo",
+    familia: "ACESSORIA",
+    severidade: "MEDIO",
+    tributo: "ICMS",
+    fontesNecessarias: ["SPED_FISCAL"],
+    descricao:
+      "A assinatura digital do arquivo é posterior ao dia 15 do mês seguinte ao da " +
+      "apuração, prazo de entrega da EFD em Goiás. O arquivo não é transmitido antes " +
+      "de assinado.",
+    exemplo:
+      "A EFD de março de 2026 foi assinada em 18/04/2026, três dias depois do " +
+      "prazo de 15/04/2026.",
+    baseLegal: ["RCTE-GO, art. 356-N", "Ajuste SINIEF nº 02/2009, cláusula décima segunda"],
+    textoCliente: "Há EFD ICMS/IPI entregue depois do dia 15 do mês seguinte.",
+  },
+  {
+    codigo: "G07",
+    area: "FISCAL",
+    titulo: "EFD-Contribuições entregue depois do prazo",
+    familia: "ACESSORIA",
+    severidade: "MEDIO",
+    tributo: "PIS_COFINS",
+    fontesNecessarias: ["SPED_CONTRIBUICOES"],
+    descricao:
+      "Transmissão (pelo recibo, ou pela assinatura digital) posterior ao 10º dia útil " +
+      "do segundo mês subsequente ao da escrituração.",
+    exemplo:
+      "A EFD-Contribuições de abril de 2026 foi transmitida em 17/06/2026, depois " +
+      "do 10º dia útil de junho, 15/06/2026.",
+    baseLegal: ["IN RFB nº 1.252/2012, art. 4º", "Guia Prático da EFD-Contribuições, seção 3"],
+    textoCliente: "Há EFD-Contribuições entregue fora do prazo.",
+  },
+  {
+    codigo: "G08",
+    area: "FISCAL",
+    titulo: "Bloco K sem dados em estabelecimento industrial",
+    familia: "ACESSORIA",
+    severidade: "MEDIO",
+    tributo: "ICMS",
+    fontesNecessarias: ["SPED_FISCAL"],
+    descricao:
+      "EFD com indicador de atividade industrial (IND_ATIV 0) e o Bloco K — controle " +
+      "da produção e do estoque — marcado sem dados.",
+    exemplo:
+      "A empresa fabrica formas metálicas, se declara industrial no registro 0000 e " +
+      "entrega o K001 com IND_MOV 1 em todos os meses.",
+    baseLegal: ["Ajuste SINIEF nº 02/2009 e alterações", "Guia Prático da EFD ICMS/IPI — Bloco K"],
+    textoCliente: "O controle de produção e estoque (Bloco K) está vazio embora a empresa seja industrial.",
+  },
+  {
+    codigo: "G09",
+    area: "FISCAL",
+    titulo: "Inventário zerado ou sem itens",
+    familia: "ACESSORIA",
+    severidade: "MEDIO",
+    tributo: null,
+    fontesNecessarias: ["SPED_FISCAL"],
+    descricao:
+      "Registro H005 com valor total zero ou sem itens no H010, em empresa que compra " +
+      "e vende mercadorias. O inventário é a base do custo e do resultado.",
+    exemplo:
+      "A EFD de fevereiro informa inventário de 31/12 com valor R$ 0,00, embora a " +
+      "empresa tenha comprado aço e vendido produtos no período.",
+    baseLegal: ["Guia Prático da EFD ICMS/IPI — Bloco H", "RIR/2018 — custo das mercadorias vendidas"],
+    textoCliente: "O inventário de encerramento foi declarado zerado.",
+  },
+  {
+    codigo: "G10",
+    area: "FISCAL",
+    titulo: "Lacuna na numeração das NF-e emitidas",
+    familia: "ACESSORIA",
+    severidade: "BAIXO",
+    tributo: null,
+    fontesNecessarias: ["NFE_XML"],
+    descricao:
+      "Número pulado dentro de uma série de NF-e, sem nota autorizada, cancelada ou " +
+      "escriturada com aquele número.",
+    exemplo:
+      "A série 1 vai da NF-e 120 à 158 entre 01/2026 e 03/2026, mas não há nota " +
+      "131 nem 144 autorizada, cancelada ou inutilizada.",
+    baseLegal: ["Ajuste SINIEF nº 07/2005, cláusula décima quarta (inutilização de numeração)"],
+    textoCliente: "Há números de NF-e pulados sem inutilização identificada.",
+  },
+  {
     codigo: "G04",
     area: "FISCAL",
     regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],

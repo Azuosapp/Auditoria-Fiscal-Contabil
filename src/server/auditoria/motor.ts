@@ -14,6 +14,7 @@ import { familiaD } from "./regras/familia-d-regime";
 import { familiaE } from "./regras/familia-e-icms";
 import { familiaF } from "./regras/familia-f-contabil";
 import { familiaEDocumento } from "./regras/familia-e-documento";
+import { familiaG } from "./regras/familia-g-obrigacoes";
 import { mesAno } from "./texto";
 
 /**
@@ -26,7 +27,7 @@ import { mesAno } from "./texto";
  * a reunião com o cliente.
  */
 
-const REGRAS: Regra[] = [familiaB, familiaC, familiaD, familiaE, familiaEDocumento, familiaF];
+const REGRAS: Regra[] = [familiaB, familiaC, familiaD, familiaE, familiaEDocumento, familiaF, familiaG];
 
 export interface ResultadoAuditoria {
   achados: number;
