@@ -133,7 +133,7 @@ export class ColetorIdentidade {
         motivo: conflito
           ? `Há escrituração de ${fortes.length} CNPJs diferentes no lote. ` +
             `Assumido o mais frequente (${fortes[0].ocorrenciasFortes} arquivos).`
-          : "Identificada pelo registro 0000 da escrituração fiscal.",
+          : "Identificada pelo CNPJ declarado nos próprios arquivos.",
         outrosCandidatos: fortes.slice(1),
       };
     }

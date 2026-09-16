@@ -104,9 +104,35 @@ export async function POST(req: Request) {
     data: { caminho },
   });
 
+  const cnpj = analise.identificacao.empresa?.cnpj;
+
+  // Nem todo arquivo traz o cadastro completo: a DCTF só informa o CNPJ, sem
+  // razão social nem UF. Quando a empresa já existe, o que faltar vem do
+  // cadastro — sem isso o formulário abre com a razão social em branco e trava
+  // a importação de uma empresa que o sistema já conhece. O que o arquivo
+  // trouxe tem precedência: ele é o dado mais recente.
+  if (cnpj && analise.identificacao.empresa) {
+    const cadastrada = await prisma.empresa.findFirst({
+      where: { cnpj },
+      select: {
+        razaoSocial: true,
+        uf: true,
+        inscricaoEstadual: true,
+        municipio: true,
+      },
+    });
+    if (cadastrada) {
+      const e = analise.identificacao.empresa;
+      e.razaoSocial = e.razaoSocial || cadastrada.razaoSocial;
+      e.uf = e.uf || cadastrada.uf || undefined;
+      e.inscricaoEstadual =
+        e.inscricaoEstadual || cadastrada.inscricaoEstadual || undefined;
+      e.codigoMunicipio = e.codigoMunicipio || cadastrada.municipio || undefined;
+    }
+  }
+
   // Se a empresa deduzida já tem auditoria aberta, a tela precisa saber para
   // oferecer "somar à existente" em vez de criar outra em silêncio.
-  const cnpj = analise.identificacao.empresa?.cnpj;
   const auditoriaAberta = cnpj
     ? await prisma.auditoria.findFirst({
         where: {
