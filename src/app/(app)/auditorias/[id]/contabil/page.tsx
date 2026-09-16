@@ -70,8 +70,8 @@ export default async function ContabilPage({
       <div className="mb-3">
         <h2 className="text-[13px] font-bold">Análise contábil e de recolhimento</h2>
         <p className="mt-0.5 text-[10px] text-content-muted">
-          Tributo apurado × confessado × pago, escrituração contábil e obrigações
-          acessórias. Erro de apuração e de documento fiscal fica na aba{" "}
+          Pagamento — tributo declarado ou confessado e não recolhido — e escrituração
+          contábil. Erros de apuração, declaração e obrigação acessória ficam na aba{" "}
           <strong>Fiscal</strong>.
         </p>
       </div>
@@ -113,7 +113,7 @@ export default async function ContabilPage({
       </div>
 
       <AcompanharAnaliseIa emAndamento={ia.emAndamento} />
-      {ia.emAndamento || ia.concluidaEm ? (
+      {ia.emAndamento || ia.apontamentos.length > 0 ? (
         <p className="mb-2 text-[10px] text-content-muted">
           {ia.emAndamento ? (
             <>
@@ -121,7 +121,7 @@ export default async function ContabilPage({
               aparecem aqui ao terminar, e a página se atualiza sozinha.{" "}
             </>
           ) : null}
-          {ia.concluidaEm ? (
+          {ia.concluidaEm && ia.apontamentos.length > 0 ? (
             <>
               A lista inclui os apontamentos {"contábeis"} da análise do Claude de{" "}
               {ia.concluidaEm.toLocaleDateString("pt-BR")} às{" "}

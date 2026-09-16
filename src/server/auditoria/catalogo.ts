@@ -735,7 +735,7 @@ const FAMILIA_F: DefinicaoAchado[] = [
 const FAMILIA_G: DefinicaoAchado[] = [
   {
     codigo: "G02",
-    area: "CONTABIL",
+    area: "FISCAL",
     titulo: "Obrigação acessória não entregue em exercício obrigatório",
     familia: "ACESSORIA",
     severidade: "ALTO",

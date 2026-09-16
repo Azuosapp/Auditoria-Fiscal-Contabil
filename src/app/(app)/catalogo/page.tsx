@@ -30,15 +30,16 @@ const AREAS: { chave: AreaAchado; titulo: string; descricao: string }[] = [
     chave: "FISCAL",
     titulo: "Análise fiscal e tributária",
     descricao:
-      "Erros de apuração, de escrituração e de documento fiscal. É o que a " +
-      "empresa declarou, escriturou e emitiu — sem entrar no recolhimento.",
+      "Erros tributários: apuração, escrituração, documento fiscal, declarações " +
+      "e obrigações acessórias. É o que a empresa declarou, escriturou e emitiu — " +
+      "sem entrar no recolhimento.",
   },
   {
     chave: "CONTABIL",
     titulo: "Análise contábil e de recolhimento",
     descricao:
-      "Tributo apurado × confessado × pago, escrituração contábil e obrigações " +
-      "acessórias. É aqui que mora tudo sobre pagamento e confissão de débito.",
+      "Pagamento — tributo declarado ou confessado e não recolhido — e " +
+      "escrituração contábil. É aqui que mora tudo sobre recolhimento.",
   },
 ];
 

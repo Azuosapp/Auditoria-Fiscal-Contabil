@@ -61,8 +61,9 @@ export default async function FiscalPage({
       <div className="mb-3">
         <h2 className="text-[13px] font-bold">Análise fiscal e tributária</h2>
         <p className="mt-0.5 text-[10px] text-content-muted">
-          Erros de apuração, de escrituração e de documento fiscal. Recolhimento,
-          confissão e escrituração contábil ficam na aba <strong>Contábil</strong>.
+          Erros tributários: apuração, escrituração, documento fiscal, declarações e
+          obrigações acessórias. Pagamento e escrituração contábil ficam na aba{" "}
+          <strong>Contábil</strong>.
         </p>
       </div>
 
@@ -105,7 +106,7 @@ export default async function FiscalPage({
       </div>
 
       <AcompanharAnaliseIa emAndamento={ia.emAndamento} />
-      {ia.emAndamento || ia.concluidaEm ? (
+      {ia.emAndamento || ia.apontamentos.length > 0 ? (
         <p className="mb-2 text-[10px] text-content-muted">
           {ia.emAndamento ? (
             <>
@@ -113,7 +114,7 @@ export default async function FiscalPage({
               aparecem aqui ao terminar, e a página se atualiza sozinha.{" "}
             </>
           ) : null}
-          {ia.concluidaEm ? (
+          {ia.concluidaEm && ia.apontamentos.length > 0 ? (
             <>
               A lista inclui os apontamentos {"fiscais"} da análise do Claude de{" "}
               {ia.concluidaEm.toLocaleDateString("pt-BR")} às{" "}
