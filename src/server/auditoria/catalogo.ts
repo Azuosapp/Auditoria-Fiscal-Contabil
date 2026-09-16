@@ -137,7 +137,7 @@ const FAMILIA_A: DefinicaoAchado[] = [
   },
   {
     codigo: "A04",
-    area: "FISCAL",
+    area: "CONTABIL",
     regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
     titulo: "IRPJ/CSLL da ECF divergente do confessado em DCTF",
     familia: "DIVERGENCIA_PAGAMENTO",
@@ -152,6 +152,30 @@ const FAMILIA_A: DefinicaoAchado[] = [
     baseLegal: ["Lei nº 9.430/1996", "IN RFB nº 1.700/2017"],
     textoCliente:
       "A ECF informa {valor} de tributo apurado em {competencia} que não aparece na DCTF. Divergência entre declarações é cruzamento automático da Receita.",
+  },
+  {
+    codigo: "A09",
+    area: "CONTABIL",
+    regimesAplicaveis: ["LUCRO_PRESUMIDO", "LUCRO_REAL"],
+    titulo: "PIS, COFINS ou IPI apurado divergente do confessado em DCTF",
+    familia: "DIVERGENCIA_PAGAMENTO",
+    severidade: "CRITICO",
+    tributo: null,
+    fontesNecessarias: ["DCTF"],
+    descricao:
+      "Contribuição a recolher da EFD-Contribuições (M200/M600) ou saldo devedor de IPI da " +
+      "EFD ICMS/IPI (E520) diferente do débito confessado em DCTF ou DCTFWeb (MIT) para o " +
+      "mesmo período. Abaixo do apurado é débito sem confissão; acima, pagamento a maior se recolhido.",
+    exemplo:
+      "A EFD-Contribuições de 03/2025 apura R$ 4.120,00 de COFINS a recolher, e a DCTF do " +
+      "mês confessa R$ 1.030,00: R$ 3.090,00 sem declaração.",
+    baseLegal: [
+      "IN RFB nº 2.005/2021 (DCTF)",
+      "IN RFB nº 1.252/2012 (EFD-Contribuições)",
+      "Lei nº 9.430/1996, art. 44 (multa de ofício)",
+    ],
+    textoCliente:
+      "Em {competencia} o tributo apurado nas escriturações não é o declarado à Receita, com diferença de {valor}.",
   },
   {
     codigo: "A05",

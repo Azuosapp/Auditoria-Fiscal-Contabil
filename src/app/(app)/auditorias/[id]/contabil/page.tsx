@@ -7,6 +7,8 @@ import { ListaAchados } from "@/components/ListaAchados";
 import { AcompanharAnaliseIa } from "@/components/AnaliseIaControles";
 import { analiseIaDaArea, contagensDasAbas } from "@/server/claude/consulta";
 import { moeda } from "@/lib/formato";
+import { ConfrontoDeclarado } from "@/components/ConfrontoDeclarado";
+import { confrontoApuradoDeclarado } from "@/server/confronto/apurado-declarado";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Análise contábil · Auditoria Azuos" };
@@ -22,7 +24,7 @@ export default async function ContabilPage({
   });
   if (!auditoria) notFound();
 
-  const [achados, lacunas, porArea, ia] = await Promise.all([
+  const [achados, lacunas, porArea, ia, confronto] = await Promise.all([
     prisma.achado.findMany({
       where: { auditoriaId: params.id, area: "CONTABIL" },
       include: { evidencias: true },
@@ -33,6 +35,7 @@ export default async function ContabilPage({
     }),
     contagensDasAbas(params.id),
     analiseIaDaArea(params.id, "CONTABIL"),
+    confrontoApuradoDeclarado(params.id),
   ]);
 
   // Fora dos totais acima: é leitura a confirmar, não cálculo testado.
@@ -111,6 +114,8 @@ export default async function ContabilPage({
           <div className="kpi-val">{lacunas.length}</div>
         </div>
       </div>
+
+      <ConfrontoDeclarado resumo={confronto} />
 
       <AcompanharAnaliseIa emAndamento={ia.emAndamento} />
       {ia.emAndamento || ia.apontamentos.length > 0 ? (

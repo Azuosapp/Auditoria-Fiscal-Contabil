@@ -273,6 +273,7 @@ model Documento {
   sociosEcf         SocioEcf[]
   escrituracao      EscrituracaoArquivo?
   difal             ApuracaoDifal[]
+  apuracoesIpi      ApuracaoIpi[]
   inventarios       Inventario[]
   saldos            SaldoConta[]
   apuracoesEcf      ApuracaoEcf[]
@@ -1109,4 +1110,19 @@ model SocioEcf {
   irRetido           Decimal? @db.Decimal(18, 2)
 
   @@index([documentoId])
+}
+
+/// SPED Fiscal E500/E520 — apuração do IPI. É o que a DCTF deve confessar.
+model ApuracaoIpi {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  competencia  String   @db.VarChar(7)
+  debitos      Decimal? @db.Decimal(18, 2)
+  creditos     Decimal? @db.Decimal(18, 2)
+  saldoCredor  Decimal? @db.Decimal(18, 2)
+  aRecolher    Decimal  @db.Decimal(18, 2)
+
+  @@index([documentoId, competencia])
 }

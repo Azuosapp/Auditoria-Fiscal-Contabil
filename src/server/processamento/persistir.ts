@@ -476,6 +476,7 @@ export async function persistirControleEscrituracao(
 ): Promise<number> {
   await tx.escrituracaoArquivo.deleteMany({ where: { documentoId } });
   await tx.apuracaoDifal.deleteMany({ where: { documentoId } });
+  await tx.apuracaoIpi.deleteMany({ where: { documentoId } });
   await tx.inventario.deleteMany({ where: { documentoId } });
   if (!competencia) return 0;
 
@@ -501,6 +502,21 @@ export async function persistirControleEscrituracao(
         totalDebitos: d.totalDebitos ?? new Prisma.Decimal(0),
         totalCreditos: d.totalCreditos,
         aRecolher: d.aRecolher,
+      },
+    });
+    n += 1;
+  }
+  for (const a of resultado.apuracoesIpi ?? []) {
+    // IPI pode ser apurado em mais de um período no mês; a competência é a do início.
+    const comp = a.periodStart ? paraCompetenciaIpi(a.periodStart) : competencia;
+    await tx.apuracaoIpi.create({
+      data: {
+        documentoId,
+        competencia: comp,
+        debitos: a.debitos,
+        creditos: a.creditos,
+        saldoCredor: a.saldoCredor,
+        aRecolher: a.aRecolher ?? new Prisma.Decimal(0),
       },
     });
     n += 1;
@@ -803,4 +819,8 @@ async function marcarEscrituradas(auditoriaId: string): Promise<number> {
   }
 
   return total;
+}
+
+function paraCompetenciaIpi(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }

@@ -305,6 +305,7 @@ async function limparExtracaoAnterior(documentoId: string) {
     prisma.linhaDre.deleteMany({ where: { documentoId } }),
     prisma.escrituracaoArquivo.deleteMany({ where: { documentoId } }),
     prisma.apuracaoDifal.deleteMany({ where: { documentoId } }),
+    prisma.apuracaoIpi.deleteMany({ where: { documentoId } }),
     prisma.inventario.deleteMany({ where: { documentoId } }),
   ]);
 }

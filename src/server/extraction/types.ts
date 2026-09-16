@@ -243,6 +243,8 @@ export interface ExtractionResult {
   eventos?: ParsedEventoNfe[];
   /** DIFAL/FCP por UF de destino (E300/E310 do SPED Fiscal). */
   difal?: ParsedDifal[];
+  /** Apuração do IPI por período (E500/E520). */
+  apuracoesIpi?: ParsedApuracaoIpi[];
   /** Inventário (H005 e soma dos H010). */
   inventarios?: ParsedInventario[];
   /** Bloco K: COM_DADOS, SEM_DADOS (K001 = 1) ou AUSENTE. */
@@ -262,6 +264,20 @@ export interface ParsedDifal {
   /** E310 campo 06 — VL_TOT_CREDITOS_DIFAL */
   totalCreditos?: Money;
   /** E310 campo 10 — VL_RECOL_DIFAL */
+  aRecolher?: Money;
+}
+
+/** Apuração do IPI (E500/E520 do SPED Fiscal). */
+export interface ParsedApuracaoIpi {
+  periodStart?: Date;
+  periodEnd?: Date;
+  /** E520 campo 03 — VL_DEB_IPI */
+  debitos?: Money;
+  /** E520 campo 04 — VL_CRED_IPI */
+  creditos?: Money;
+  /** E520 campo 07 — VL_SC_IPI, saldo credor a transportar */
+  saldoCredor?: Money;
+  /** E520 campo 08 — VL_SD_IPI, saldo devedor a recolher */
   aRecolher?: Money;
 }
 

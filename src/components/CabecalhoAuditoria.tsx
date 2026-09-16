@@ -33,7 +33,10 @@ export function CabecalhoAuditoria({
         </p>
       </div>
       <div className="flex gap-2">
-        <Link href={`/auditorias/${auditoria.id}/relatorio`} className="btn-primary">
+        <Link href={`/apresentacao/${auditoria.id}`} className="btn-primary">
+          Apresentar
+        </Link>
+        <Link href={`/auditorias/${auditoria.id}/relatorio`} className="btn-ghost">
           Gerar PDF
         </Link>
         <Link href={`/importar?auditoria=${auditoria.id}`} className="btn-ghost">

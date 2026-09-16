@@ -3,6 +3,7 @@ import { dec } from "@/server/tax/decimal";
 import { decodeTextBuffer, type DetectedEncoding } from "./encoding";
 import { isValidAccessKey } from "./access-key";
 import type {
+  ParsedApuracaoIpi,
   ParsedDifal,
   ParsedInventario,
   ExtractionResult,
@@ -138,6 +139,8 @@ export function parseSpedEfd(
   let pendingPeriod: { start?: Date; end?: Date } | undefined;
   let currentApuracao: ParsedApuracao | undefined;
   const difal: ParsedDifal[] = [];
+  const apuracoesIpi: ParsedApuracaoIpi[] = [];
+  let periodoIpi: { start?: Date; end?: Date } | undefined;
   let currentDifal: ParsedDifal | undefined;
   const inventarios: ParsedInventario[] = [];
   let currentInventario: ParsedInventario | undefined;
@@ -447,6 +450,22 @@ export function parseSpedEfd(
          * zerado enquanto os XMLs destacam DIFAL para ela é o sinal de DIFAL
          * não escriturado.
          */
+        /** IPI: E500 abre o período, E520 traz o saldo apurado. */
+        case "E500": {
+          periodoIpi = { start: parseSpedDate(f(3)), end: parseSpedDate(f(4)) };
+          break;
+        }
+        case "E520": {
+          apuracoesIpi.push({
+            periodStart: periodoIpi?.start,
+            periodEnd: periodoIpi?.end,
+            debitos: dec(f(3)),
+            creditos: dec(f(4)),
+            saldoCredor: dec(f(7)),
+            aRecolher: dec(f(8)),
+          });
+          break;
+        }
         case "E300": {
           currentDifal = {
             uf: f(2) ?? "",
@@ -537,6 +556,7 @@ export function parseSpedEfd(
     apuracoes,
     identification,
     difal,
+    apuracoesIpi,
     inventarios,
     blocoK,
     dataAssinatura: dataAssinaturaDigital(buffer),
