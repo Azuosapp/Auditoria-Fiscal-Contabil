@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { dadosApresentacao, type ItemApresentacao, type NivelApresentacao } from "@/server/apresentacao/dados";
@@ -98,7 +99,7 @@ function Reservados({ quantidade, cor }: { quantidade: number; cor: string }) {
         ))}
       </div>
       <div className="absolute inset-0 flex items-center justify-center bg-white/40">
-        <div className="rounded-xl px-6 py-4 text-center text-white shadow-lg" style={{ background: "linear-gradient(135deg, var(--azuos-dark), var(--azuos-primary))" }}>
+        <div className="rounded-xl px-6 py-4 text-center text-white shadow-lg" style={{ background: "var(--azuos-hero)" }}>
           <div className="text-[22px]">🔒</div>
           <div className="text-[16px] font-bold">+ {quantidade} apontamento(s) neste nível</div>
           <div className="text-[12px] text-white/75">Detalhados no relatório completo da auditoria</div>
@@ -126,10 +127,13 @@ export default async function ApresentacaoPage({ params }: { params: { id: strin
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)", fontSize: 14 }}>
       {/* Capa */}
-      <header className="px-8 pb-10 pt-5 text-white" style={{ background: "linear-gradient(135deg, var(--azuos-dark), var(--azuos-primary))" }}>
+      <header className="px-8 pb-10 pt-5 text-white" style={{ background: "var(--azuos-hero)" }}>
         <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <div className="text-[13px] font-extrabold tracking-[2px]">
-            AZUOS <span className="font-medium text-white/60">· Analyze Auditoria</span>
+          <div className="flex items-center gap-3">
+            <Image src="/brand/azuos-branco.png" alt="Grupo Azuos" width={5957} height={2678} priority className="-my-4 -ml-4 h-24 w-auto" />
+            <span className="border-l border-white/25 pl-3 text-[12px] font-semibold uppercase tracking-[1.5px] text-white/70">
+              Analyze Auditoria
+            </span>
           </div>
           <div className="flex gap-2 print:hidden">
             <Link href="/apresentacao" className="rounded-md border border-white/25 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-white/10">
@@ -240,7 +244,7 @@ export default async function ApresentacaoPage({ params }: { params: { id: strin
           </div>
         ) : null}
 
-        <footer className="mt-12 rounded-xl p-6 text-white" style={{ background: "linear-gradient(135deg, var(--azuos-dark), var(--azuos-primary))" }}>
+        <footer className="mt-12 rounded-xl p-6 text-white" style={{ background: "var(--azuos-hero)" }}>
           <div className="text-[18px] font-bold">O relatório completo mostra cada apontamento em detalhe</div>
           <p className="mt-1 text-[14px] text-white/80">
             Nota por nota, registro por registro, com o valor, a base legal e o caminho da correção — e o que ainda não pôde

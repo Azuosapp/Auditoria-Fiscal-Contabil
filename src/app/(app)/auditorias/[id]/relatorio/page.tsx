@@ -239,7 +239,8 @@ export default async function RelatorioPage({
 
       <article className="rel">
         <header className="rel-capa">
-          <div className="rel-marca">AZUOS</div>
+          {/* eslint-disable-next-line @next/next/no-img-element -- o PDF sai do navegador; img simples imprime sem depender do otimizador */}
+          <img src="/brand/azuos-azul.png" alt="Grupo Azuos" className="rel-marca" style={{ height: "22mm", width: "auto", margin: "-5mm 0 -3mm -4mm" }} />
           <div className="rel-sub">Auditoria Fiscal e Contábil</div>
 
           <div style={{ marginTop: "12mm" }}>

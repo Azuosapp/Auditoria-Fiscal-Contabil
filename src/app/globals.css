@@ -4,20 +4,39 @@
 
 /* ============================================================
    Padrão visual Azuos — docs/PADRAO_VISUAL.md
-   Fonte: dashboard-azuos.html (asaas-dashboard, 07/08/2026)
+   Fonte: Azuosapp/azuos-brand (tokens, logo) e
+   Projetos-Grupo-Azus/trilha-azuos (referência de produção).
+   Cores e logo NÃO se inventam aqui: mudou a marca, muda lá e copia.
    ============================================================ */
 
 :root {
-  --azuos-dark: #102a60;
-  --azuos-primary: #183a83;
-  --azuos-accent: #183a83;
-  --azuos-light: #e8f0fe;
-  --azuos-gold: #f0e915;
+  /* Marca — azuos-brand/css/azuos-design-system.css */
+  --azuos-blue-darkest: #0a1a4a;
+  --azuos-blue-dark: #0f2460;
+  --azuos-blue: #1b3a8c; /* AZUL OFICIAL */
+  --azuos-blue-light: #2b5ce6;
+  --azuos-blue-100: #e1e6f5;
+  --azuos-yellow: #f5c518; /* AMARELO OFICIAL — nunca sobre branco */
+  --azuos-yellow-dark: #e6b000;
 
-  --bg: #f0f2f5;
+  /* Gradientes da marca */
+  --azuos-sidebar: linear-gradient(180deg, #0a1a4a 0%, #0f2460 60%, #1b3a8c 100%);
+  --azuos-hero: linear-gradient(135deg, #0a1a4a 0%, #1b3a8c 60%, #2b5ce6 100%);
+  --azuos-button: linear-gradient(135deg, #1b3a8c 0%, #2b5ce6 100%);
+  --azuos-yellow-gradient: linear-gradient(135deg, #f5c518 0%, #e6b000 100%);
+
+  /* Nomes usados pelos componentes do sistema (apontam para a marca) */
+  --azuos-dark: var(--azuos-blue-dark);
+  --azuos-primary: var(--azuos-blue);
+  --azuos-accent: var(--azuos-blue);
+  --azuos-light: var(--azuos-blue-100);
+  --azuos-gold: var(--azuos-yellow);
+
+  --bg: #f0f4ff;
   --card: #fff;
   --border: #e2e8f0;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow: 0 2px 12px rgba(27, 58, 140, 0.08);
+  --shadow-lg: 0 16px 48px rgba(27, 58, 140, 0.18);
 
   --text: #1e293b;
   --muted: #64748b;
@@ -36,71 +55,99 @@ html,
 body {
   padding: 0;
   margin: 0;
-  font-family: "Inter", -apple-system, "Segoe UI", Arial, sans-serif;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
   font-size: 12px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar Azuos */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--azuos-blue);
+  border-radius: 3px;
+}
+
+@keyframes az-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-az-fade {
+  animation: az-fade 0.18s ease-out;
 }
 
 /* ---------- Estrutura ---------- */
 
 .shell {
   @apply grid min-h-screen;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 232px 1fr;
 }
 
 .sidebar {
   @apply sticky top-0 flex h-screen flex-col overflow-hidden text-white;
-  background: var(--surface-sidebar, #0f172a);
-  border-right: 1px solid #1e293b;
+  background: var(--azuos-sidebar);
 }
 
 .sb-brand {
-  @apply px-[18px] pb-[14px] pt-[18px];
-  border-bottom: 1px solid #1e293b;
+  @apply px-4 pb-3 pt-4;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .sb-nav-title {
-  @apply px-3 pb-1.5 pt-2.5 text-[9px] font-semibold uppercase;
-  letter-spacing: 0.6px;
-  color: rgba(255, 255, 255, 0.35);
+  @apply px-3 pb-1.5 pt-3 text-[9px] font-bold uppercase;
+  letter-spacing: 0.8px;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .sb-item {
-  @apply mb-px flex w-full cursor-pointer items-center gap-2.5 rounded-md border-none
-    bg-transparent px-3 py-[9px] text-left text-xs font-medium transition-all;
-  color: rgba(255, 255, 255, 0.7);
+  @apply relative mb-0.5 flex w-full cursor-pointer items-center gap-2.5 rounded-xl border-none
+    bg-transparent px-3 py-[9px] text-left text-xs font-semibold transition-colors;
+  color: rgba(255, 255, 255, 0.72);
   font-family: inherit;
 }
 .sb-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 .sb-item[data-ativo="true"] {
-  background: var(--azuos-primary);
+  background: rgba(255, 255, 255, 0.14);
   color: #fff;
+  box-shadow: inset 3px 0 0 var(--azuos-yellow);
 }
 
 .hdr {
   @apply sticky top-0 z-[100] flex items-center justify-between px-6 py-3 text-white;
-  background: linear-gradient(135deg, var(--azuos-dark), var(--azuos-primary));
+  background: var(--azuos-hero);
 }
 
 .main {
   @apply flex-1 overflow-y-auto px-6 py-5;
-  background: #f8fafc;
+  background: var(--bg);
 }
 
 /* ---------- Superfícies ---------- */
 
 .card {
-  @apply rounded-[10px] bg-white p-[14px];
+  @apply rounded-2xl bg-white p-4;
   box-shadow: var(--shadow);
 }
 
 .kpis {
-  @apply mb-[14px] grid gap-2.5;
+  @apply mb-[14px] grid gap-3;
   grid-template-columns: repeat(6, 1fr);
 }
 @media (max-width: 1280px) {
@@ -115,9 +162,9 @@ body {
 }
 
 .kpi {
-  @apply rounded-[10px] bg-white px-4 py-[14px] transition-transform;
+  @apply rounded-2xl bg-white px-4 py-[14px] transition-transform;
   box-shadow: var(--shadow);
-  border-left: 3px solid var(--azuos-accent);
+  border-left: 4px solid var(--azuos-accent);
 }
 .kpi:hover {
   transform: translateY(-1px);
@@ -142,25 +189,28 @@ body {
 /* ---------- Abas ---------- */
 
 .tabs {
-  @apply mb-[14px] flex gap-0.5 overflow-x-auto rounded-lg bg-white p-[3px];
+  @apply mb-[14px] flex gap-0.5 overflow-x-auto rounded-xl bg-white p-1;
   box-shadow: var(--shadow);
 }
 
 .tab {
-  @apply cursor-pointer whitespace-nowrap rounded-md border-none bg-transparent
-    px-4 py-[7px] text-[11px] font-medium transition-all;
+  @apply cursor-pointer whitespace-nowrap rounded-lg border-none bg-transparent
+    px-4 py-[7px] text-[11px] font-semibold transition-all;
   color: var(--muted);
   font-family: inherit;
 }
+.tab:hover {
+  color: var(--azuos-blue);
+}
 .tab[data-ativo="true"] {
-  background: var(--azuos-primary);
+  background: var(--azuos-button);
   color: #fff;
 }
 
 /* ---------- Tabela ---------- */
 
 .tbl-wrap {
-  @apply max-h-[500px] overflow-y-auto rounded-lg;
+  @apply max-h-[500px] overflow-y-auto rounded-xl;
   border: 1px solid var(--border);
 }
 
@@ -170,7 +220,7 @@ body {
 .tbl thead th {
   @apply sticky top-0 z-10 px-2.5 py-2 text-left text-[9px] font-semibold uppercase;
   letter-spacing: 0.5px;
-  background: #f1f5f9;
+  background: #eef2fb;
   color: var(--muted);
   border-bottom: 1px solid var(--border);
 }
@@ -179,13 +229,13 @@ body {
   border-bottom: 1px solid #f1f5f9;
 }
 .tbl tbody tr:hover td {
-  background: #f8fafc;
+  background: #f5f8ff;
 }
 
 /* Número sempre à direita, tabular, monoespaçado */
 .num {
   @apply text-right tabular-nums;
-  font-family: "SF Mono", Menlo, ui-monospace, monospace;
+  font-family: "JetBrains Mono", "SF Mono", Menlo, ui-monospace, monospace;
 }
 
 /* ---------- Formulário ---------- */
@@ -197,34 +247,42 @@ body {
 }
 
 .input {
-  @apply w-full rounded-md px-3 py-2 text-xs outline-none transition;
+  @apply w-full rounded-xl bg-white px-3 py-2 text-xs outline-none transition;
   border: 1px solid var(--border);
 }
 .input:focus {
-  border-color: var(--azuos-primary);
-  box-shadow: 0 0 0 3px var(--azuos-light);
+  border-color: var(--azuos-blue-light);
+  box-shadow: 0 0 0 3px rgba(43, 92, 230, 0.15);
 }
 
 .btn {
-  @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-md
+  @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl
     border-none px-4 py-2 text-xs font-semibold transition
     disabled:pointer-events-none disabled:opacity-50;
   font-family: inherit;
 }
 .btn-primary {
   @apply btn text-white;
-  background: var(--azuos-primary);
+  background: var(--azuos-button);
+  box-shadow: 0 2px 8px rgba(27, 58, 140, 0.25);
 }
 .btn-primary:hover {
-  background: var(--azuos-dark);
+  filter: brightness(1.08);
 }
 .btn-ghost {
   @apply btn bg-white;
   border: 1px solid var(--border);
-  color: var(--text);
+  color: var(--azuos-blue);
 }
 .btn-ghost:hover {
-  background: #f8fafc;
+  background: #f5f8ff;
+  border-color: rgba(27, 58, 140, 0.25);
+}
+/* Acento amarelo: só sobre azul ou como destaque pequeno (regra da marca). */
+.btn-accent {
+  @apply btn;
+  background: var(--azuos-yellow-gradient);
+  color: var(--azuos-blue-darkest);
 }
 
 /* ---------- Severidade do achado ---------- */
@@ -256,7 +314,7 @@ body {
 
 /* Cartão de achado: a borda esquerda carrega a severidade */
 .achado {
-  @apply rounded-[10px] bg-white p-[14px];
+  @apply rounded-2xl bg-white p-[14px];
   box-shadow: var(--shadow);
   border-left: 3px solid var(--muted);
 }

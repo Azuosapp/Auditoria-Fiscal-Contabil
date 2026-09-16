@@ -105,7 +105,7 @@ export function ConfrontoDeclarado({
             >
               <div
                 className="flex items-center justify-between px-3 py-2 text-white"
-                style={{ background: "linear-gradient(135deg, var(--azuos-dark), var(--azuos-primary))" }}
+                style={{ background: "var(--azuos-hero)" }}
               >
                 <span className={grande ? "text-[16px] font-bold" : "text-[12px] font-bold"}>{NOME[t]}</span>
                 <span className="text-white/70" style={{ fontSize: grande ? 12 : 10 }}>

@@ -4,6 +4,13 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Auditoria Azuos",
   description: "Auditoria fiscal e contábil a partir dos arquivos do cliente",
+  icons: {
+    icon: [
+      { url: "/brand/favicon.svg", type: "image/svg+xml" },
+      { url: "/brand/favicon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/brand/apple-icon.png",
+  },
 };
 
 export default function RootLayout({

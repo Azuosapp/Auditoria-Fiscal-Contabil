@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Azuos favicon">
+  <rect width="64" height="64" rx="14" fill="#1B3A8C"/>
+  <path d="M16 44c0-8 6-11 13-11s13 3 13-3-7-10-13-8" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="49" cy="26" r="6" fill="#F5C518"/>
+</svg>

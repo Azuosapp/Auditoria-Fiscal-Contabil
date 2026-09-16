@@ -1,11 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /**
  * Navegação lateral no padrão Azuos (docs/PADRAO_VISUAL.md).
- * As classes vêm de globals.css e reproduzem o dashboard-azuos.html.
+ * As classes vêm de globals.css e seguem o azuos-brand e o menu do trilha-azuos.
  */
 
 type Item = { href: string; rotulo: string; icone: string };
@@ -36,10 +37,17 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sb-brand">
-        <div className="text-[15px] font-extrabold tracking-tight text-white">
-          AZUOS
-        </div>
-        <div className="mt-0.5 text-[9px] uppercase tracking-[0.6px] text-white/40">
+        {/* Logo oficial (azuos-brand/trilha-azuos). O PNG tem margem própria,
+            compensada pelas margens negativas. */}
+        <Image
+          src="/brand/azuos-branco.png"
+          alt="Grupo Azuos"
+          width={5957}
+          height={2678}
+          priority
+          className="-mb-2 -ml-3 -mt-3 h-[72px] w-auto"
+        />
+        <div className="text-[9px] font-semibold uppercase tracking-[0.8px] text-white/50">
           Auditoria Fiscal e Contábil
         </div>
       </div>
@@ -66,7 +74,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-[#1e293b] px-4 py-3 text-[9px] text-white/35">
+      <div className="border-t border-white/10 px-4 py-3 text-[9px] text-white/45">
         Analyze Auditoria e Consultoria Tributária
       </div>
     </aside>
