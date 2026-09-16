@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AbasAuditoria } from "@/components/AbasAuditoria";
+import { contagensDasAbas } from "@/server/claude/consulta";
 import { CabecalhoAuditoria } from "@/components/CabecalhoAuditoria";
 import { cnpj as fmtCnpj, moeda } from "@/lib/formato";
 
@@ -56,19 +57,10 @@ export default async function SituacaoFiscalPage({
       where: { documento: { auditoriaId: params.id } },
       orderBy: [{ natureza: "asc" }, { receita: "asc" }],
     }),
-    prisma.achado.groupBy({
-      by: ["area"],
-      where: { auditoriaId: params.id },
-      _count: { _all: true },
-    }),
+    contagensDasAbas(params.id),
   ]);
 
-  const porArea = Object.fromEntries(
-    contagens.map((c) => [
-      c.area === "FISCAL" ? "/fiscal" : "/contabil",
-      c._count._all,
-    ]),
-  );
+  const porArea = contagens;
 
   const totalConsolidado = pendencias.reduce(
     (s, p) => s.plus(p.saldoConsolidado ?? p.saldoDevedor ?? 0),

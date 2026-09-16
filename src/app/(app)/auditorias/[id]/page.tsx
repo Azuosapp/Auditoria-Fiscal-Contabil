@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { BotaoProcessar } from "@/components/BotaoProcessar";
 import { AbasAuditoria } from "@/components/AbasAuditoria";
+import { contagensDasAbas } from "@/server/claude/consulta";
 import { RegimePorExercicio } from "@/components/RegimePorExercicio";
 import { LimparDados } from "@/components/LimparDados";
 import { cnpj as fmtCnpj, competencia as fmtComp, moeda } from "@/lib/formato";
@@ -117,11 +118,7 @@ export default async function AuditoriaPage({
     }),
   ]);
 
-  const contagensArea = await prisma.achado.groupBy({
-    by: ["area"],
-    where: { auditoriaId: auditoria.id },
-    _count: { _all: true },
-  });
+
   // Exercícios cobertos pelo período — é para eles que o regime é pedido.
   const anoIni = Number(auditoria.competenciaIni.slice(0, 4));
   const anoFim = Number(auditoria.competenciaFim.slice(0, 4));
@@ -130,12 +127,7 @@ export default async function AuditoriaPage({
     (_, i) => anoIni + i,
   );
 
-  const achadosPorArea = Object.fromEntries(
-    contagensArea.map((c) => [
-      c.area === "FISCAL" ? "/fiscal" : "/contabil",
-      c._count._all,
-    ]),
-  );
+  const achadosPorArea = await contagensDasAbas(auditoria.id);
 
   const pendentes =
     porStatus.find((s) => s.status === "PENDENTE")?._count._all ?? 0;

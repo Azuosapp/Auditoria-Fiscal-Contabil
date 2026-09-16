@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
-import type { Achado, Evidencia, Lacuna } from "@prisma/client";
+import type { Achado, ApontamentoIa, Evidencia, Lacuna } from "@prisma/client";
+import { ApontamentoIaCard } from "./ApontamentoIaCard";
 import { competencia as fmtComp, moeda } from "@/lib/formato";
 import { definicaoDe } from "@/server/auditoria/catalogo";
 
@@ -305,11 +306,14 @@ export function ListaAchados({
   achados,
   lacunas,
   vazio,
+  apontamentosIa = [],
 }: {
   achados: AchadoComEvidencias[];
   lacunas: Lacuna[];
   /** Texto exibido quando a área não produziu achado. */
   vazio: string;
+  /** Apontamentos da análise do Claude desta área. */
+  apontamentosIa?: ApontamentoIa[];
 }) {
   const ordenados = [...achados].sort(
     (a, b) =>
@@ -322,6 +326,20 @@ export function ListaAchados({
   const decaidos = ordenados.filter((a) => a.situacaoPrescricional === "DECAIDO");
   const aDecair = ordenados.filter((a) => a.situacaoPrescricional === "A_DECAIR");
   const grupos = agrupar(exigiveis);
+
+  // Uma lista só, por gravidade: o crítico apontado pelo Claude não pode ficar
+  // abaixo de um achado baixo das regras só por ter vindo de outra fonte. No
+  // empate, a regra vem antes — é o número já testado.
+  type Item =
+    | { tipo: "regra"; severidade: string; grupo: GrupoAchado }
+    | { tipo: "ia"; severidade: string; apontamento: ApontamentoIa };
+  const itens: Item[] = [
+    ...grupos.map((g) => ({ tipo: "regra" as const, severidade: g.severidade, grupo: g })),
+    ...apontamentosIa.map((a) => ({ tipo: "ia" as const, severidade: a.severidade, apontamento: a })),
+  ].sort(
+    (x, y) =>
+      ORDEM_SEVERIDADE.indexOf(x.severidade) - ORDEM_SEVERIDADE.indexOf(y.severidade),
+  );
 
   return (
     <>
@@ -336,7 +354,7 @@ export function ListaAchados({
         </div>
       ) : null}
 
-      {exigiveis.length === 0 ? (
+      {itens.length === 0 ? (
         <div className="card py-10 text-center">
           <div className="text-[13px] font-semibold">Nenhum achado nesta área</div>
           <p className="mx-auto mt-1 max-w-lg text-[11px] text-content-muted">
@@ -345,7 +363,16 @@ export function ListaAchados({
         </div>
       ) : (
         <div className="space-y-3">
-          {grupos.map((g) => {
+          {itens.map((item) => {
+            if (item.tipo === "ia") {
+              return (
+                <ApontamentoIaCard
+                  key={item.apontamento.id}
+                  apontamento={item.apontamento}
+                />
+              );
+            }
+            const g = item.grupo;
             const a = g.representante;
             const repetido = g.ocorrencias.length > 1;
             const periodo = resumoCompetencias(g.ocorrencias);

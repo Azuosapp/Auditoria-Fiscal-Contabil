@@ -7,39 +7,13 @@ import {
   AcompanharAnaliseIa,
   BotaoAnaliseIa,
 } from "@/components/AnaliseIaControles";
-import { competencia as fmtComp, moeda } from "@/lib/formato";
+import { moeda } from "@/lib/formato";
+import { contagensDasAbas } from "@/server/claude/consulta";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Análise do Claude · Auditoria Azuos" };
 
 const ORDEM_SEVERIDADE = ["CRITICO", "ALTO", "MEDIO", "BAIXO", "OPORTUNIDADE"];
-
-const CLASSE_SEV: Record<string, string> = {
-  CRITICO: "sev sev-critico",
-  ALTO: "sev sev-alto",
-  MEDIO: "sev sev-medio",
-  BAIXO: "sev sev-baixo",
-  OPORTUNIDADE: "sev sev-oportunidade",
-};
-
-const ROTULO_CONFIANCA: Record<string, string> = {
-  ALTA: "confiança alta",
-  MEDIA: "confiança média",
-  BAIXA: "confiança baixa",
-};
-
-interface Evidencia {
-  arquivo: string;
-  localizacao: string;
-  detalhe: string;
-  valor: string;
-}
-
-function periodo(comps: string[]): string | null {
-  if (comps.length === 0) return null;
-  if (comps.length === 1) return fmtComp(comps[0]);
-  return `${comps.length} competências · ${fmtComp(comps[0])} a ${fmtComp(comps[comps.length - 1])}`;
-}
 
 function duracao(seg: number | null): string {
   if (seg === null) return "—";
@@ -58,13 +32,14 @@ export default async function AnaliseIaPage({
   });
   if (!auditoria) notFound();
 
-  const [ultima, rodadas] = await Promise.all([
+  const [ultima, rodadas, contagens] = await Promise.all([
     prisma.analiseIa.findFirst({
       where: { auditoriaId: params.id },
       orderBy: { iniciadaEm: "desc" },
       include: { apontamentos: true },
     }),
     prisma.analiseIa.count({ where: { auditoriaId: params.id } }),
+    contagensDasAbas(params.id),
   ]);
 
   // Enquanto a nova roda, a anterior concluída continua visível: a tela não
@@ -99,7 +74,7 @@ export default async function AnaliseIaPage({
   return (
     <>
       <CabecalhoAuditoria auditoria={auditoria} empresa={auditoria.empresa} />
-      <AbasAuditoria auditoriaId={params.id} />
+      <AbasAuditoria auditoriaId={params.id} contagens={contagens} />
       <AcompanharAnaliseIa emAndamento={emAndamento} />
 
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
@@ -108,8 +83,9 @@ export default async function AnaliseIaPage({
           <p className="mt-0.5 max-w-3xl text-[10px] text-content-muted">
             Leitura completa dos arquivos importados, feita pelo Claude com os agentes
             tributários do escritório, a cada nova importação. É análise de auditor, a
-            confirmar: <strong>não entra nos totais da auditoria</strong>, que vêm só
-            das regras programadas. Confira as evidências antes de levar ao cliente.
+            confirmar: os apontamentos aparecem nas abas <strong>Fiscal</strong> e{" "}
+            <strong>Contábil</strong>, com o selo "Claude · a confirmar", e não entram
+            nos totais das regras. Confira as evidências antes de levar ao cliente.
           </p>
         </div>
         <BotaoAnaliseIa
@@ -190,84 +166,42 @@ export default async function AnaliseIaPage({
             <div className="card mb-3 text-[11px] leading-relaxed">{exibida.resumo}</div>
           ) : null}
 
-          {apontamentos.length === 0 ? (
-            <div className="card py-8 text-center text-[11px] text-content-muted">
-              A análise não encontrou erro além dos já apontados pelas regras.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {apontamentos.map((a) => {
-                const evidencias = (a.evidencias ?? []) as unknown as Evidencia[];
-                return (
-                  <article key={a.id} className="achado" data-sev={a.severidade}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={CLASSE_SEV[a.severidade]}>{a.severidade}</span>
-                      <span className="text-[12px] font-semibold">{a.titulo}</span>
-                      <span className="sev sev-baixo">{a.area === "FISCAL" ? "fiscal" : "contábil"}</span>
-                      {a.tributo ? (
-                        <span className="text-[10px] text-content-muted">{a.tributo}</span>
-                      ) : null}
-                      {periodo(a.competencias) ? (
-                        <span className="font-mono text-[10px] text-content-muted">
-                          {periodo(a.competencias)}
-                        </span>
-                      ) : null}
-                      <span className="sev sev-baixo">{ROTULO_CONFIANCA[a.confianca]}</span>
-                      {a.valorEstimado ? (
-                        <span className="ml-auto font-mono text-[13px] font-bold">
-                          {moeda(a.valorEstimado)}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <p className="mt-2 whitespace-pre-line text-[11px]">{a.descricao}</p>
-
-                    {a.recomendacao ? (
-                      <p className="mt-2 text-[10px]">
-                        <strong>O que fazer:</strong> {a.recomendacao}
-                      </p>
-                    ) : null}
-
-                    {evidencias.length > 0 ? (
-                      <details className="mt-2 rounded-md border border-surface-border">
-                        <summary className="cursor-pointer px-2 py-1 text-[10px] font-medium text-content-muted">
-                          Ver as evidências — {evidencias.length} ponto(s) para conferir
-                        </summary>
-                        <div className="border-t border-surface-border">
-                          <table className="tbl !text-[10px]">
-                            <thead>
-                              <tr>
-                                <th className="w-48">Arquivo</th>
-                                <th className="w-56">Onde</th>
-                                <th>O que mostra</th>
-                                <th className="w-32">Valor</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {evidencias.map((e, i) => (
-                                <tr key={i}>
-                                  <td className="break-all">{e.arquivo}</td>
-                                  <td className="break-all font-mono text-[9px]">{e.localizacao}</td>
-                                  <td>{e.detalhe}</td>
-                                  <td className="num">{e.valor}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </details>
-                    ) : null}
-
-                    {a.baseLegal.length > 0 ? (
-                      <div className="mt-2 text-[9px] text-content-muted">
-                        {a.baseLegal.join(" · ")}
-                      </div>
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
-          )}
+          {/*
+            Os apontamentos ficam nas abas da área de cada um: é lá que quem
+            revisa a auditoria já olha. Aqui fica o painel da rodada.
+          */}
+          <div className="mb-3 grid gap-3 md:grid-cols-2">
+            {(["FISCAL", "CONTABIL"] as const).map((area) => {
+              const daArea = apontamentos.filter((a) => a.area === area);
+              const valor = daArea
+                .filter((a) => a.severidade !== "OPORTUNIDADE")
+                .reduce((s, a) => s.plus(a.valorEstimado ?? 0), new Prisma.Decimal(0));
+              const sufixo = area === "FISCAL" ? "fiscal" : "contabil";
+              return (
+                <a
+                  key={area}
+                  href={`/auditorias/${params.id}/${sufixo}`}
+                  className="card block hover:border-azuos-primary"
+                >
+                  <div className="text-[11px] font-bold">
+                    Aba {area === "FISCAL" ? "Fiscal" : "Contábil"} →
+                  </div>
+                  <div className="mt-1 text-[10px] text-content-muted">
+                    {daArea.length} apontamento(s) ·{" "}
+                    {daArea.filter((a) => a.severidade === "CRITICO").length} crítico(s) ·{" "}
+                    exposição estimada {moeda(valor)}
+                  </div>
+                  <ul className="mt-2 space-y-0.5 text-[10px]">
+                    {daArea.map((a) => (
+                      <li key={a.id}>
+                        <span className="font-semibold">{a.severidade}</span> — {a.titulo}
+                      </li>
+                    ))}
+                  </ul>
+                </a>
+              );
+            })}
+          </div>
 
           {exibida.documentosFaltantes.length > 0 ? (
             <section className="mt-4">

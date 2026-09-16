@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { AbasAuditoria } from "@/components/AbasAuditoria";
 import { CabecalhoAuditoria } from "@/components/CabecalhoAuditoria";
 import { ListaAchados } from "@/components/ListaAchados";
+import { AcompanharAnaliseIa } from "@/components/AnaliseIaControles";
+import { analiseIaDaArea, contagensDasAbas } from "@/server/claude/consulta";
 import { moeda } from "@/lib/formato";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +22,7 @@ export default async function FiscalPage({
   });
   if (!auditoria) notFound();
 
-  const [achados, lacunas, contagens] = await Promise.all([
+  const [achados, lacunas, porArea, ia] = await Promise.all([
     prisma.achado.findMany({
       where: { auditoriaId: params.id, area: "FISCAL" },
       include: { evidencias: true },
@@ -29,19 +31,14 @@ export default async function FiscalPage({
       where: { auditoriaId: params.id, area: "FISCAL" },
       orderBy: { escopo: "asc" },
     }),
-    prisma.achado.groupBy({
-      by: ["area"],
-      where: { auditoriaId: params.id },
-      _count: { _all: true },
-    }),
+    contagensDasAbas(params.id),
+    analiseIaDaArea(params.id, "FISCAL"),
   ]);
 
-  const porArea = Object.fromEntries(
-    contagens.map((c) => [
-      c.area === "FISCAL" ? "/fiscal" : "/contabil",
-      c._count._all,
-    ]),
-  );
+  // Fora dos totais acima: é leitura a confirmar, não cálculo testado.
+  const iaExposicao = ia.apontamentos
+    .filter((a) => a.severidade !== "OPORTUNIDADE")
+    .reduce((s, a) => s.plus(a.valorEstimado ?? 0), new Prisma.Decimal(0));
 
   // Achado decaído fica fora dos totais: não é exigível nem recuperável. E
   // achado de confiança não-ALTA entra num número próprio — somá-lo ao risco
@@ -94,13 +91,41 @@ export default async function FiscalPage({
           <div className="kpi-label">Achados fiscais</div>
           <div className="kpi-val">{achados.length}</div>
         </div>
+        <div className="kpi" style={{ borderLeftColor: "#7c3aed" }}>
+          <div className="kpi-label">Apontado pelo Claude</div>
+          <div className="kpi-val">{moeda(iaExposicao)}</div>
+          <div className="kpi-sub">
+            {ia.apontamentos.length} apontamento(s) · a confirmar
+          </div>
+        </div>
         <div className="kpi">
           <div className="kpi-label">Não avaliados</div>
           <div className="kpi-val">{lacunas.length}</div>
         </div>
       </div>
 
+      <AcompanharAnaliseIa emAndamento={ia.emAndamento} />
+      {ia.emAndamento || ia.concluidaEm ? (
+        <p className="mb-2 text-[10px] text-content-muted">
+          {ia.emAndamento ? (
+            <>
+              <strong>Análise do Claude em andamento</strong> — os apontamentos novos
+              aparecem aqui ao terminar, e a página se atualiza sozinha.{" "}
+            </>
+          ) : null}
+          {ia.concluidaEm ? (
+            <>
+              A lista inclui os apontamentos {"fiscais"} da análise do Claude de{" "}
+              {ia.concluidaEm.toLocaleDateString("pt-BR")} às{" "}
+              {ia.concluidaEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })},
+              marcados <strong>Claude · a confirmar</strong> e fora dos totais.
+            </>
+          ) : null}
+        </p>
+      ) : null}
+
       <ListaAchados
+        apontamentosIa={ia.apontamentos}
         achados={achados}
         lacunas={lacunas}
         vazio="Com os documentos importados, as regras fiscais aplicáveis não encontraram inconsistência. Veja abaixo o que não pôde ser avaliado."
